@@ -39,7 +39,7 @@ ENABLED=$(uci -q get runet-fix.adblock.enabled || echo "1")
 
 if [ "$ENABLED" != "1" ]; then
     echo "[runet-fix:adblock] Adblock is disabled in config. Cleaning up..."
-    rm -f "$CONF_FILE"
+    rm -f "$CONF_FILE" /tmp/runet-fix-adblock.count
     /etc/init.d/dnsmasq reload >/dev/null 2>&1 || killall -SIGHUP dnsmasq 2>/dev/null
     exit 0
 fi
@@ -107,6 +107,7 @@ echo "[runet-fix:adblock] Total unique ad domains blocked: $TOTAL"
 
 # Format into dnsmasq address=/domain/ syntax (redirects to 0.0.0.0 and ::)
 awk '{ print "address=/" $0 "/" }' "$TEMP_DOMAINS" > "$CONF_FILE"
+echo "$TOTAL" > /tmp/runet-fix-adblock.count
 
 rm -f "$TEMP_RAW" "$TEMP_DOMAINS"
 

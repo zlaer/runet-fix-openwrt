@@ -23,14 +23,19 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callServiceList('runet-fix'),
-			fs.lines('/tmp/dnsmasq.d/runet-fix-adblock.conf').catch(function() { return []; })
+			fs.read('/tmp/runet-fix-adblock.count').then(function(res) {
+				return parseInt((res || '').trim()) || 0;
+			}).catch(function() {
+				return fs.stat('/tmp/dnsmasq.d/runet-fix-adblock.conf').then(function(stat) {
+					return (stat && stat.size > 0) ? Math.round(stat.size / 30) : 0;
+				}).catch(function() { return 0; });
+			})
 		]);
 	},
 
 	render: function(data) {
 		var serviceData = data[0] || {};
-		var adblockLines = data[1] || [];
-		var adblockRules = adblockLines.length;
+		var adblockRules = data[1] || 0;
 
 		// Extract instances from procd
 		var instances = (serviceData['runet-fix'] && serviceData['runet-fix'].instances) ? serviceData['runet-fix'].instances : {};

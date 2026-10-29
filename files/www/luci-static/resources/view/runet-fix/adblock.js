@@ -8,14 +8,20 @@ return view.extend({
 		return Promise.all([
 			fs.read('/usr/share/runet-fix/lists/adblock-whitelist.txt').catch(function() { return ''; }),
 			fs.read('/usr/share/runet-fix/lists/adblock-blacklist.txt').catch(function() { return ''; }),
-			fs.read('/tmp/dnsmasq.d/runet-fix-adblock.conf').catch(function() { return ''; })
+			fs.read('/tmp/runet-fix-adblock.count').then(function(res) {
+				return parseInt((res || '').trim()) || 0;
+			}).catch(function() {
+				return fs.stat('/tmp/dnsmasq.d/runet-fix-adblock.conf').then(function(stat) {
+					return (stat && stat.size > 0) ? Math.round(stat.size / 30) : 0;
+				}).catch(function() { return 0; });
+			})
 		]);
 	},
 
 	render: function(data) {
 		var whitelistContent = data[0] || '';
 		var blacklistContent = data[1] || '';
-		var totalBlocked = data[2] ? data[2].trim().split('\n').length : 0;
+		var totalBlocked = data[2] || 0;
 
 		var m = new form.Map('runet-fix', _('Smart Adblock (dnsmasq integration)'),
 			_('Ultra-lightweight DNS-level ad and tracking blocker. Loads high-quality filter lists directly into OpenWrt dnsmasq with zero background memory overhead.'));
@@ -28,7 +34,11 @@ return view.extend({
 		var info = s.option(form.DummyValue, '_info', _('Active Status'));
 		info.rawhtml = true;
 		info.cfgvalue = function() {
-			return '<strong>' + totalBlocked + '</strong> ' + _('unique ad/tracking domains currently blocked in dnsmasq.');
+			if (totalBlocked > 0) {
+				return '<span style="color:#28a745;font-weight:bold;">● ACTIVE:</span> <strong>' + totalBlocked.toLocaleString() + '</strong> ' + _('unique ad/tracking domains currently blocked in dnsmasq.');
+			} else {
+				return '<span style="color:#dc3545;font-weight:bold;">● INACTIVE:</span> ' + _('No active blocking rules loaded.');
+			}
 		};
 
 		var profile = s.option(form.ListValue, 'profile', _('Filter Profile'),
