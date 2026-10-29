@@ -65,7 +65,7 @@ esac
 if [ "$ENABLED" != "1" ]; then
     echo "[runet-fix:adblock] Adblock is disabled in config. Cleaning up..."
     rm -f "$CONF_FILE" /tmp/runet-fix-adblock.count
-    /etc/init.d/dnsmasq reload >/dev/null 2>&1 || killall -SIGHUP dnsmasq 2>/dev/null
+    /etc/init.d/dnsmasq restart >/dev/null 2>&1
     exit 0
 fi
 
@@ -120,10 +120,25 @@ awk '
     }
 ' "$TEMP_RAW" > "$TEMP_DOMAINS"
 
-# Apply whitelist if present
+# Apply whitelist if present (exact domain matching only, ignoring comments and whitespace)
 if [ -s "$WHITELIST" ]; then
-    echo "[runet-fix:adblock] Applying whitelist..."
-    grep -v -F -f "$WHITELIST" "$TEMP_DOMAINS" > "${TEMP_DOMAINS}.clean"
+    echo "[runet-fix:adblock] Applying whitelist (exact match)..."
+    awk '
+        NR == FNR {
+            sub(/[#;!].*$/, "")
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+            if ($0 != "") {
+                white[tolower($0)] = 1
+            }
+            next
+        }
+        {
+            dom = tolower($0)
+            if (!white[dom]) {
+                print dom
+            }
+        }
+    ' "$WHITELIST" "$TEMP_DOMAINS" > "${TEMP_DOMAINS}.clean"
     mv "${TEMP_DOMAINS}.clean" "$TEMP_DOMAINS"
 fi
 
@@ -136,8 +151,8 @@ echo "$TOTAL" > /tmp/runet-fix-adblock.count
 
 rm -f "$TEMP_RAW" "$TEMP_DOMAINS"
 
-# Tell dnsmasq to reload configuration
-echo "[runet-fix:adblock] Reloading dnsmasq..."
-/etc/init.d/dnsmasq reload >/dev/null 2>&1 || killall -SIGHUP dnsmasq 2>/dev/null
+# Tell dnsmasq to restart configuration
+echo "[runet-fix:adblock] Restarting dnsmasq..."
+/etc/init.d/dnsmasq restart >/dev/null 2>&1
 
 echo "[runet-fix:adblock] Update completed successfully."

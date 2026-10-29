@@ -95,6 +95,15 @@ start_nft() {
         nft "add rule inet $TABLE_NAME zapret_mangle_out udp dport 443 ct original packets < 10 counter queue num $QNUM bypass"
         echo "[runet-fix] Zapret NFQUEUE ($QNUM) active (Forward + Output)"
     fi
+
+    # 4. Port 53 DNS redirection (forces all clients through dnsmasq, prevents hardcoded DNS bypass)
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
+    if [ "$adb_enabled" = "1" ]; then
+        nft "add chain inet $TABLE_NAME dns_nat_pre { type nat hook prerouting priority dstnat; policy accept; }"
+        nft "add rule inet $TABLE_NAME dns_nat_pre udp dport 53 counter redirect to :53"
+        nft "add rule inet $TABLE_NAME dns_nat_pre tcp dport 53 counter redirect to :53"
+        echo "[runet-fix] DNS interception active -> local dnsmasq :53"
+    fi
 }
 
 stop_nft() {
@@ -150,6 +159,13 @@ start_ipt() {
             iptables -t mangle -A RUNET_ZAPRET -p udp --dport 19294:19344 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         fi
         iptables -t mangle -I FORWARD -j RUNET_ZAPRET
+    fi
+
+    # DNS Redirection (port 53)
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
+    if [ "$adb_enabled" = "1" ]; then
+        iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
+        iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
     fi
 }
 
