@@ -32,7 +32,7 @@ setup_firewall() {
 
 test_url() {
     local url="$1"
-    local res=$(curl -s -k -m 3 -w "%{http_code}:%{time_total}" -o /dev/null "$url" 2>/dev/null || echo "000:3.0")
+    local res=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "$url" 2>/dev/null || echo "000:2.5")
     echo "$res"
 }
 
@@ -80,6 +80,27 @@ setup_firewall
 STRATEGIES="
 youtube_4k|YouTube 4K Multisplit|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6
 flowseal_general|Flowseal General|--dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6
+general_alt|Flowseal ALT (Fake+Fakedsplit TS)|--dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00
+general_alt2|Flowseal ALT2 (Multisplit Pos 2)|--dpi-desync=multisplit --dpi-desync-split-pos=2
+general_alt3|Flowseal ALT3 (Hostfakesplit TS)|--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts
+general_alt4|Flowseal ALT4 (Multisplit Badseq)|--dpi-desync=fake,multisplit --dpi-desync-fooling=badseq --dpi-desync-repeats=6
+general_alt5|Flowseal ALT5 (Syndata Multidisorder)|--dpi-desync=syndata,multidisorder
+general_alt6|Flowseal ALT6 (Multisplit Pos 1)|--dpi-desync=multisplit --dpi-desync-split-pos=1
+general_alt7|Flowseal ALT7 (Multisplit Pos 2 Sniext)|--dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1
+general_alt8|Flowseal ALT8 (Fake Badseq R6)|--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6
+general_alt9|Flowseal ALT9 (Hostfakesplit TS+MD5)|--dpi-desync=hostfakesplit --dpi-desync-fooling=ts,md5sig --dpi-desync-repeats=4
+general_alt10|Flowseal ALT10 (Fake TS R6)|--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6
+general_alt11|Flowseal ALT11 (Multisplit Pos 1 TS)|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8
+general_alt12|Flowseal ALT12 (Hostfakesplit Simple)|--dpi-desync=hostfakesplit --dpi-desync-fooling=ts
+general_alt13|Flowseal ALT13 (Hostfakesplit TS R5)|--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-repeats=5
+general_fake_tls_auto|Flowseal FAKE TLS AUTO|--dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-fooling=badseq --dpi-desync-repeats=11
+general_fake_tls_alt|Flowseal FAKE TLS ALT|--dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8
+general_fake_tls_alt2|Flowseal FAKE TLS ALT2|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8
+general_fake_tls_alt3|Flowseal FAKE TLS ALT3|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8
+general_simple_fake|Flowseal SIMPLE FAKE|--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6
+general_simple_fake_alt|Flowseal SIMPLE FAKE ALT|--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6
+general_simple_fake_alt2|Flowseal SIMPLE FAKE ALT2|--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-cutoff=n5 --dpi-desync-repeats=6
+general_exp|Flowseal EXP (Experimental TS)|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8
 fakedsplit_badseq|Fakedsplit Desync|--dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6
 multisplit_badsum|Multisplit Badsum|--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-repeats=4
 disorder2_badseq|Disorder2 Out-of-Order|--dpi-desync=disorder2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq
@@ -143,7 +164,7 @@ EOF
     # Start candidate nfqws instance on test queue with proper argument evaluation
     eval "/usr/bin/nfqws --qnum=$QNUM_TEST $strat_args >/dev/null 2>&1 &"
     TEST_PID=$!
-    sleep 1
+    sleep 0.5
 
     # Test YouTube
     yt_res=$(test_url "$TARGET_YT")

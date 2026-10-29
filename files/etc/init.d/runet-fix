@@ -52,6 +52,69 @@ get_zapret_args() {
         discord_fix)
             echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3"
             ;;
+        general_alt)
+            echo "--qnum=$qnum --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00"
+            ;;
+        general_alt2)
+            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=2"
+            ;;
+        general_alt3)
+            echo "--qnum=$qnum --dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts"
+            ;;
+        general_alt4)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            ;;
+        general_alt5)
+            echo "--qnum=$qnum --dpi-desync=syndata,multidisorder"
+            ;;
+        general_alt6)
+            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=1"
+            ;;
+        general_alt7)
+            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1"
+            ;;
+        general_alt8)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            ;;
+        general_alt9)
+            echo "--qnum=$qnum --dpi-desync=hostfakesplit --dpi-desync-fooling=ts,md5sig --dpi-desync-repeats=4"
+            ;;
+        general_alt10)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            ;;
+        general_alt11)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            ;;
+        general_alt12)
+            echo "--qnum=$qnum --dpi-desync=hostfakesplit --dpi-desync-fooling=ts"
+            ;;
+        general_alt13)
+            echo "--qnum=$qnum --dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-repeats=5"
+            ;;
+        general_fake_tls_auto)
+            echo "--qnum=$qnum --dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-fooling=badseq --dpi-desync-repeats=11"
+            ;;
+        general_fake_tls_alt)
+            echo "--qnum=$qnum --dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            ;;
+        general_fake_tls_alt2)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            ;;
+        general_fake_tls_alt3)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            ;;
+        general_simple_fake)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            ;;
+        general_simple_fake_alt)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            ;;
+        general_simple_fake_alt2)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-cutoff=n5 --dpi-desync-repeats=6"
+            ;;
+        general_exp)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            ;;
         custom)
             echo "--qnum=$qnum $custom"
             ;;

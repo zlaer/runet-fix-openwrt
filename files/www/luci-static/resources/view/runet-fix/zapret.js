@@ -4,6 +4,34 @@
 'require fs';
 'require ui';
 
+function renderZapretTable(resultsObj) {
+	if (!resultsObj || !resultsObj.results || !resultsObj.results.length) {
+		return '<div style="color:#888;margin:12px 0;">' + _('Авто-тест еще не запускался. Нажмите кнопку "Запустить авто-тест стратегий" для автоматического подбора конфигурации.') + '</div>';
+	}
+	var rows = '';
+	var best = resultsObj.best_preset || '';
+	var sorted = resultsObj.results.slice().sort(function(a, b) { return b.score - a.score; });
+	sorted.forEach(function(item) {
+		var isBest = (item.id === best);
+		var rowBg = isBest ? 'background:#1e3d2f;' : '';
+		var star = isBest ? ' <span class="badge" style="background:#28a745;color:#fff;margin-left:6px;font-weight:bold;">★ РЕКОМЕНДУЕТСЯ</span>' : '';
+		var ytBadge = item.yt_pass ?
+			'<span class="rf-badge-pass">✔ PASS (' + item.yt_time_ms + 'ms)</span>' :
+			'<span class="rf-badge-fail">✖ FAIL (Блок)</span>';
+		var dcBadge = item.dc_pass ?
+			'<span class="rf-badge-pass">✔ PASS (' + item.dc_time_ms + 'ms)</span>' :
+			'<span class="rf-badge-fail">✖ FAIL (Блок)</span>';
+		var applyBtn = '<button class="btn cbi-button-action" style="padding:2px 8px;font-size:12px;" onclick="window.applyZapretPreset(\'' + item.id + '\')">' + _('Применить') + '</button>';
+		rows += '<div class="tr" style="' + rowBg + '"><div class="td" style="font-weight:bold;">' + item.name + star + '<br><small style="color:#aaa;font-weight:normal;">' + item.args + '</small></div><div class="td" style="vertical-align:middle;">' + ytBadge + '</div><div class="td" style="vertical-align:middle;">' + dcBadge + '</div><div class="td" style="vertical-align:middle;text-align:right;">' + applyBtn + '</div></div>';
+	});
+	var timeInfo = resultsObj.timestamp ? '<small style="color:#888;display:block;margin-top:6px;">Последний замер: ' + resultsObj.timestamp + '</small>' : '';
+	return '<div class="table" style="margin-top:10px;border:1px solid #444;border-radius:4px;overflow:hidden;"><div class="tr table-titles"><div class="th">' + _('Профиль стратегии') + '</div><div class="th">' + _('YouTube 4K') + '</div><div class="th">' + _('Discord Gateway') + '</div><div class="th" style="text-align:right;">' + _('Действие') + '</div></div>' + rows + '</div>' + timeInfo;
+}
+
+if (typeof window !== 'undefined') {
+	window.renderZapretTable = renderZapretTable;
+}
+
 return view.extend({
 	load: function() {
 		return Promise.all([
@@ -63,7 +91,7 @@ return view.extend({
 				'    <span id="rf-badge-state" class="rf-badge-active">ТЕСТИРОВАНИЕ</span>' +
 				'  </div>' +
 				'  <div style="margin-top:10px;font-size:13px;color:#eee;">' +
-				'    <span>Прогресс: Шаг <b id="rf-step">0</b> из <b id="rf-total">8</b> (<span id="rf-pct">0%</span>)</span>' +
+				'    <span>Прогресс: Шаг <b id="rf-step">0</b> из <b id="rf-total">29</b> (<span id="rf-pct">0%</span>)</span>' +
 				'    <div style="margin-top:4px;">' +
 				'      Текущая стратегия: <strong id="rf-strat-name" style="color:#00bc8c;">Инициализация...</strong>' +
 				'    </div>' +
@@ -80,34 +108,10 @@ return view.extend({
 				'</div>' +
 
 				// Results table container
-				'<div id="autotest-results-table">' + window.renderZapretTable(initialResults) + '</div>' +
+				'<div id="autotest-results-table">' + renderZapretTable(initialResults) + '</div>' +
 				'</div>' +
 
 				'<script>' +
-				'window.renderZapretTable = function(resultsObj) {' +
-				'  if (!resultsObj || !resultsObj.results || !resultsObj.results.length) {' +
-				'    return \'<div style="color:#888;margin:12px 0;">' + _('Авто-тест еще не запускался. Нажмите кнопку "Запустить авто-тест стратегий" для автоматического подбора конфигурации.') + '</div>\';' +
-				'  }' +
-				'  var rows = "";' +
-				'  var best = resultsObj.best_preset || "";' +
-				'  var sorted = resultsObj.results.slice().sort(function(a, b) { return b.score - a.score; });' +
-				'  sorted.forEach(function(item) {' +
-				'    var isBest = (item.id === best);' +
-				'    var rowBg = isBest ? "background:#1e3d2f;" : "";' +
-				'    var star = isBest ? \' <span class="badge" style="background:#28a745;color:#fff;margin-left:6px;font-weight:bold;">★ РЕКОМЕНДУЕТСЯ</span>\' : "";' +
-				'    var ytBadge = item.yt_pass ?' +
-				'      \'<span class="rf-badge-pass">✔ PASS (\' + item.yt_time_ms + \'ms)</span>\' :' +
-				'      \'<span class="rf-badge-fail">✖ FAIL (Блок)</span>\';' +
-				'    var dcBadge = item.dc_pass ?' +
-				'      \'<span class="rf-badge-pass">✔ PASS (\' + item.dc_time_ms + \'ms)</span>\' :' +
-				'      \'<span class="rf-badge-fail">✖ FAIL (Блок)</span>\';' +
-				'    var applyBtn = \'<button class="btn cbi-button-action" style="padding:2px 8px;font-size:12px;" onclick="window.applyZapretPreset(\\\'\' + item.id + \'\\\')">\' + _(\'Применить\') + \'</button>\';' +
-				'    rows += \'<div class="tr" style="\' + rowBg + \'"><div class="td" style="font-weight:bold;">\' + item.name + star + \'<br><small style="color:#aaa;font-weight:normal;">\' + item.args + \'</small></div><div class="td" style="vertical-align:middle;">\' + ytBadge + \'</div><div class="td" style="vertical-align:middle;">\' + dcBadge + \'</div><div class="td" style="vertical-align:middle;text-align:right;">\' + applyBtn + \'</div></div>\';' +
-				'  });' +
-				'  var timeInfo = resultsObj.timestamp ? \'<small style="color:#888;display:block;margin-top:6px;">Последний замер: \' + resultsObj.timestamp + \'</small>\' : "";' +
-				'  return \'<div class="table" style="margin-top:10px;border:1px solid #444;border-radius:4px;overflow:hidden;"><div class="tr table-titles"><div class="th">\' + _(\'Профиль стратегии\') + \'</div><div class="th">\' + _(\'YouTube 4K\') + \'</div><div class="th">\' + _(\'Discord Gateway\') + \'</div><div class="th" style="text-align:right;">\' + _(\'Действие\') + \'</div></div>\' + rows + \'</div>\' + timeInfo;' +
-				'};' +
-
 				'var zapretPollTimer = null;' +
 
 				'window.pollZapretStatus = function() {' +
@@ -135,10 +139,10 @@ return view.extend({
 				'      if (pBar) pBar.style.width = (st.progress || 0) + "%";' +
 				'      if (pPct) pPct.innerText = (st.progress || 0) + "%";' +
 				'      if (pStep) pStep.innerText = st.step || 0;' +
-				'      if (pTotal) pTotal.innerText = st.total || 8;' +
+				'      if (pTotal) pTotal.innerText = st.total || 29;' +
 				'      if (pName) pName.innerText = st.current_name || "";' +
 				'      if (pArgs) pArgs.innerText = st.current_args || "";' +
-				'      if (pBadge) { pBadge.className = "rf-badge-active"; pBadge.innerText = "ШАГ " + (st.step || 0) + " / " + (st.total || 8); }' +
+				'      if (pBadge) { pBadge.className = "rf-badge-active"; pBadge.innerText = "ШАГ " + (st.step || 0) + " / " + (st.total || 29); }' +
 				'      if (pSpinner) pSpinner.className = "rf-spin-icon";' +
 				'      if (pTitle) pTitle.innerHTML = "' + _('Идет тестирование DPI стратегий...') + '";' +
 				'      if (st.results && st.results.length > 0 && pTable) {' +
@@ -149,7 +153,7 @@ return view.extend({
 				'      if (btn) btn.disabled = false;' +
 				'      if (pBar) pBar.style.width = "100%";' +
 				'      if (pPct) pPct.innerText = "100%";' +
-				'      if (pStep) pStep.innerText = st.total || 8;' +
+				'      if (pStep) pStep.innerText = st.total || 29;' +
 				'      if (pSpinner) { pSpinner.className = "rf-done-icon"; pSpinner.innerText = "✔"; }' +
 				'      if (pBadge) { pBadge.style.background = "#28a745"; pBadge.innerText = "ГОТОВО"; }' +
 				'      if (pTitle) { pTitle.innerHTML = \'<span style="color:#28a745;font-weight:bold;">✔ Тестирование завершено! Рекомендуемый пресет: <b>\' + (st.best_preset || "") + \'</b></span>\'; }' +
@@ -225,6 +229,8 @@ return view.extend({
 
 		var preset = s.option(form.ListValue, 'preset', _('Active DPI Bypass Preset'),
 			_('Select a tested strategy or use the Auto-Tester above to detect the best one automatically.'));
+		
+		// Curated Standard Presets
 		preset.value('youtube_4k', _('YouTube 4K Multisplit (Recommended - Multisplit + Seqovl)'));
 		preset.value('flowseal_general', _('Flowseal General (Universal Fake + Split2, badseq, md5sig)'));
 		preset.value('fakedsplit_badseq', _('Fakedsplit (Combined Fake + Data Split)'));
@@ -234,6 +240,30 @@ return view.extend({
 		preset.value('wsize_badsum', _('Fake Window Size 4 (TCP Window Desync)'));
 		preset.value('tls_cutoff', _('TLS Cutoff d4 (Fast Cutoff)'));
 		preset.value('discord_fix', _('Discord Full Fix (STUN Fake UDP + Media TCP 2053-8443)'));
+
+		// Additional Desktop Alternative Configs (Flowseal ALT Suite)
+		preset.value('general_alt', _('Flowseal ALT (Fake + Fakedsplit TS, Pattern 0x00)'));
+		preset.value('general_alt2', _('Flowseal ALT2 (Multisplit Pos 2)'));
+		preset.value('general_alt3', _('Flowseal ALT3 (Fake + Hostfakesplit TS)'));
+		preset.value('general_alt4', _('Flowseal ALT4 (Fake + Multisplit Badseq R6)'));
+		preset.value('general_alt5', _('Flowseal ALT5 (Syndata Multidisorder)'));
+		preset.value('general_alt6', _('Flowseal ALT6 (Multisplit Pos 1)'));
+		preset.value('general_alt7', _('Flowseal ALT7 (Multisplit Pos 2 + Sniext)'));
+		preset.value('general_alt8', _('Flowseal ALT8 (Fake Badseq R6)'));
+		preset.value('general_alt9', _('Flowseal ALT9 (Hostfakesplit TS + MD5Sig R4)'));
+		preset.value('general_alt10', _('Flowseal ALT10 (Fake TS R6)'));
+		preset.value('general_alt11', _('Flowseal ALT11 (Fake + Multisplit Pos 1 TS R8)'));
+		preset.value('general_alt12', _('Flowseal ALT12 (Hostfakesplit Simple TS)'));
+		preset.value('general_alt13', _('Flowseal ALT13 (Fake + Hostfakesplit TS R5)'));
+		preset.value('general_fake_tls_auto', _('Flowseal FAKE TLS AUTO (Multidisorder Midsld Badseq R11)'));
+		preset.value('general_fake_tls_alt', _('Flowseal FAKE TLS ALT (Fake + Fakedsplit Pos 1 Badseq R8)'));
+		preset.value('general_fake_tls_alt2', _('Flowseal FAKE TLS ALT2 (Fake + Multisplit Pos 1 Badseq R8)'));
+		preset.value('general_fake_tls_alt3', _('Flowseal FAKE TLS ALT3 (Fake + Multisplit Pos 1 TS R8)'));
+		preset.value('general_simple_fake', _('Flowseal SIMPLE FAKE (Fake TS R6)'));
+		preset.value('general_simple_fake_alt', _('Flowseal SIMPLE FAKE ALT (Fake Badseq R6)'));
+		preset.value('general_simple_fake_alt2', _('Flowseal SIMPLE FAKE ALT2 (Fake TS Cutoff n5 R6)'));
+		preset.value('general_exp', _('Flowseal EXP (Experimental Multisplit TS R8)'));
+
 		preset.value('custom', _('Custom Arguments (Enter below)'));
 		preset.default = 'youtube_4k';
 
