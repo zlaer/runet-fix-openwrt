@@ -375,6 +375,9 @@ async def _handle_client(reader, writer, secret: bytes):
                 log.info("[%s] DC%d%s fallback closed", label, dc, media_tag)
             else:
                 log.warning("[%s] DC%d%s no fallback available", label, dc, media_tag)
+                if orig_ip:
+                    log.debug("[%s] trying direct raw pipe to original dst %s:%d", label, orig_ip, orig_port)
+                    await _raw_pipe(clt_reader, clt_writer, handshake, orig_ip, orig_port, label)
             return
 
         log.info("[%s] DC%d%s -> WS pool hit", label, dc, media_tag)

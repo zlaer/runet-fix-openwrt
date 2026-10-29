@@ -248,7 +248,11 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
             label, dc, media_tag)
     connect_started = time.monotonic()
 
+    attempts = 0
     for base_domain in balancer.get_domains_for_dc(dc):
+        if attempts >= 2:
+            break
+        attempts += 1
         domain = f'kws{dc}.{base_domain}'
         try:
             ws = await RawWebSocket.connect(domain, domain, timeout=1.8, 
