@@ -316,35 +316,6 @@ return view.extend({
 
 		var m = new form.Map('runet-fix', t.title, t.desc);
 
-		// Top language bar
-		var s_top = m.section(form.NamedSection, 'main', 'global');
-		s_top.render = function() {
-			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			return E('div', {
-				'style': 'display:flex;justify-content:flex-end;align-items:center;margin-bottom:12px;gap:8px;'
-			}, [
-				E('span', { 'style': 'font-size:13px;color:#888;font-weight:bold;' }, t.lang_label),
-				E('div', {
-					'class': 'btn-group',
-					'style': 'display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;'
-				}, [
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle,
-						'click': function() { window.setRunetFixLang('ru'); }
-					}, 'RU'),
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle,
-						'click': function() { window.setRunetFixLang('en'); }
-					}, 'ENG')
-				])
-			]);
-		};
-
 		// 1. Master Switch & System Overview
 		var s = m.section(form.NamedSection, 'main', 'global', t.master_section);
 
@@ -411,11 +382,21 @@ return view.extend({
 		var actions = s.option(form.DummyValue, '_actions', t.actions_section);
 		actions.rawhtml = true;
 		actions.cfgvalue = function() {
-			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">' +
+			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
+			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
+
+			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + t.btn_zapret_settings + '</a> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
 				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
+				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
+				'<span style="font-size:13px;color:#888;font-weight:bold;">' + t.lang_label + '</span>' +
+				'<div class="btn-group" style="display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;">' +
+				'<button type="button" class="btn" style="padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle + '" onclick="window.setRunetFixLang(\'ru\')">RU</button>' +
+				'<button type="button" class="btn" style="padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle + '" onclick="window.setRunetFixLang(\'en\')">ENG</button>' +
+				'</div>' +
+				'</div>' +
 				'</div>';
 		};
 

@@ -15,6 +15,7 @@ var I18N = {
 		enable_desc: 'Файрвол роутера автоматически перехватывает соединения к дата-центрам Telegram и туннелирует их в обход ТСПУ.',
 		zero_conf_title: 'Режим без настройки устройств (Zero Configuration):',
 		zero_conf_text: 'Все устройства в вашей сети (iPhone, Android, Windows, Mac, Smart TV) подключаются к Telegram автоматически.<br>Вам <b>не нужно</b> включать прокси в настройках Telegram на телефонах или компьютерах.',
+		worker_spoiler_title: 'Настройка Cloudflare Worker (дополнительно)',
 		worker_field: 'Cloudflare Worker (Адрес реле)',
 		worker_desc: 'Адрес вашего бесплатного воркера (например: my-tg.username.workers.dev). Роутер пропускает через него трафик Telegram всех устройств, полностью обходя блокировку провайдера и ускоряя загрузку фото/видео. Можно указать несколько через запятую.',
 		worker_guide_title: 'Как получить бесплатный адрес Cloudflare Worker (2 минуты):',
@@ -44,6 +45,7 @@ var I18N = {
 		enable_desc: 'Router firewall intercepts outgoing Telegram DC traffic and tunnels it around ISP throttling.',
 		zero_conf_title: 'Zero Client Configuration Mode:',
 		zero_conf_text: 'All devices on your network (iPhone, Android, Windows, Mac, Smart TV) connect to Telegram automatically.<br>You <b>do not</b> need to configure proxy settings in Telegram apps on any device.',
+		worker_spoiler_title: 'Cloudflare Worker Setup (Advanced)',
 		worker_field: 'Cloudflare Worker (Relay Address)',
 		worker_desc: 'Address of your free Cloudflare Worker (e.g. my-tg.username.workers.dev). Router tunnels Telegram traffic for all home devices through this relay, bypassing ISP blocks. Multiple can be comma-separated.',
 		worker_guide_title: 'How to get a free Cloudflare Worker address (2 minutes):',
@@ -128,15 +130,37 @@ return view.extend({
 			return '<div class="alert-message notice" style="margin-top:5px;margin-bottom:12px;font-size:13px;line-height:1.6;">' +
 				'<strong>' + t.zero_conf_title + '</strong><br>' +
 				t.zero_conf_text +
-				'</div>' +
-				'<div class="alert-message info" style="margin-top:5px;margin-bottom:15px;font-size:12px;line-height:1.6;">' +
-				'<strong>' + t.worker_guide_title + '</strong><br>' +
-				t.worker_guide_text +
 				'</div>';
 		};
 
 		var workers = s.option(form.Value, 'custom_workers', t.worker_field, t.worker_desc);
 		workers.placeholder = 'my-tg-worker.username.workers.dev';
+
+		var origWorkersRender = workers.render;
+		workers.render = function(option_index, section_id, in_table) {
+			return origWorkersRender.apply(this, arguments).then(function(node) {
+				var val = uci.get('runet-fix', section_id, 'custom_workers') || '';
+				var hasValue = val.trim().length > 0;
+				var details = E('details', {
+					'style': 'background:#1e293b;padding:12px 16px;border-radius:6px;margin:15px 0;border:1px solid #334155;'
+				}, [
+					E('summary', {
+						'style': 'font-weight:bold;color:#38bdf8;cursor:pointer;font-size:13px;'
+					}, t.worker_spoiler_title),
+					E('div', {
+						'class': 'alert-message info',
+						'style': 'margin-top:12px;margin-bottom:12px;font-size:12px;line-height:1.6;'
+					}),
+					node
+				]);
+				if (hasValue) {
+					details.setAttribute('open', '');
+				}
+				details.querySelector('.alert-message.info').innerHTML =
+					'<strong>' + t.worker_guide_title + '</strong><br>' + t.worker_guide_text;
+				return details;
+			});
+		};
 
 		var port = s.option(form.Value, 'port', t.port, t.port_desc);
 		port.datatype = 'port';
