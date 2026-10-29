@@ -81,7 +81,12 @@ get_zapret_args() {
             echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
             ;;
         general_alt11)
-            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            local bin_dir="/usr/share/runet-fix/bin"
+            if [ -f "$bin_dir/tls_clienthello_www_sferum_ru.bin" ]; then
+                echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=664 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
+            else
+                echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            fi
             ;;
         general_alt12)
             echo "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts"
@@ -146,26 +151,49 @@ start_service() {
 
             local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
             local excludelist="/usr/share/runet-fix/lists/zapret-exclude.txt"
+            local bin_dir="/usr/share/runet-fix/bin"
 
             local args=""
             if [ "$preset" = "custom" ] && echo "$custom_args" | grep -q -- "--qnum"; then
                 args="$custom_args"
             else
-                local tcp_ports="80,443"
-                if [ "$discord_fix" = "1" ]; then
-                    tcp_ports="80,443,2053,2083,2087,2096,8443"
+                # 1. QUIC UDP profile (UDP 443)
+                local quic_opts="--filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11"
+                if [ -f "$bin_dir/quic_initial_www_google_com.bin" ]; then
+                    quic_opts="$quic_opts --dpi-desync-fake-quic=$bin_dir/quic_initial_www_google_com.bin"
                 fi
-                args="--qnum=$qnum --filter-tcp=$tcp_ports $desync_opts"
+
+                # 2. Discord Voice UDP profile (WebRTC & STUN)
+                local voice_opts=""
+                if [ "$discord_fix" = "1" ]; then
+                    voice_opts="--new --filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-repeats=6"
+                    if [ -f "$bin_dir/ACTIVE_DISCORD_UDP.bin" ]; then
+                        voice_opts="$voice_opts --dpi-desync-fake-discord=$bin_dir/ACTIVE_DISCORD_UDP.bin --dpi-desync-fake-stun=$bin_dir/ACTIVE_DISCORD_UDP.bin"
+                    fi
+                fi
+
+                # 3. Discord Media TCP profile (ports 2053, 2083, 2087, 2096, 8443)
+                local media_opts=""
+                if [ "$discord_fix" = "1" ]; then
+                    media_opts="--new --filter-tcp=2053,2083,2087,2096,8443 --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+                    if [ -f "$bin_dir/tls_clienthello_www_google_com.bin" ]; then
+                        media_opts="$media_opts --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin"
+                    fi
+                fi
+
+                # 4. Main Web TCP profile (ports 80, 443)
+                local main_tcp="--new --filter-tcp=80,443 $desync_opts"
                 if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
-                    args="$args --hostlist=$hostlist"
+                    main_tcp="$main_tcp --hostlist=$hostlist"
                 fi
                 if [ -s "$excludelist" ]; then
-                    args="$args --hostlist-exclude=$excludelist"
+                    main_tcp="$main_tcp --hostlist-exclude=$excludelist"
                 fi
-                args="$args --new --filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11"
-                if [ "$discord_fix" = "1" ]; then
-                    args="$args --new --filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-repeats=6"
-                fi
+
+                args="--qnum=$qnum $quic_opts"
+                [ -n "$voice_opts" ] && args="$args $voice_opts"
+                [ -n "$media_opts" ] && args="$args $media_opts"
+                args="$args $main_tcp"
             fi
 
             echo "[runet-fix] Launching $nfq_bin (preset: $preset)..."
@@ -229,15 +257,24 @@ start_service() {
         "$FIREWALL_SCRIPT" start
     fi
 
-    # 4. Check Adblock
+    # 4. Check DNS Optimization & Adblock (ECH filter & DoH canary)
+    local cdir=$(uci -q get dhcp.@dnsmasq[0].confdir)
+    if [ "$cdir" != "/tmp/dnsmasq.d" ]; then
+        uci set dhcp.@dnsmasq[0].confdir='/tmp/dnsmasq.d'
+        uci commit dhcp
+        /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+    fi
+
+    # Always ensure ECH Type 65 filtering and DoH canary blocking
+    cat << 'EOF' > /tmp/dnsmasq.d/runet-fix-filter.conf
+# Strip Type 65 (HTTPS RR) so browsers fallback from ECH/HTTP3 to standard TLS ClientHello
+filter-rr=65
+# Signal browsers (Firefox, Chrome) to disable DoH and use local DNS
+server=/use-application-dns.net/
+EOF
+
     local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
     if [ "$adb_enabled" = "1" ]; then
-        local cdir=$(uci -q get dhcp.@dnsmasq[0].confdir)
-        if [ "$cdir" != "/tmp/dnsmasq.d" ]; then
-            uci set dhcp.@dnsmasq[0].confdir='/tmp/dnsmasq.d'
-            uci commit dhcp
-            /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
-        fi
         if [ ! -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
             echo "[runet-fix] Initializing adblock in background..."
             "$ADBLOCK_SCRIPT" >/dev/null 2>&1 &
@@ -250,6 +287,8 @@ start_service() {
         if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
             rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
             /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+        else
+            /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
         fi
     fi
 }
