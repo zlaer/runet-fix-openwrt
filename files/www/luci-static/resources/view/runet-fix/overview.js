@@ -85,7 +85,7 @@ return view.extend({
 		actions.cfgvalue = function() {
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">' +
 				'<button class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + _('Restart Services') + '</button> ' +
-				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + _('⚡ Auto-Test Zapret') + '</a> ' +
+				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + _('⚡ Zapret Settings') + '</a> ' +
 				'<button class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + _('Update Adblock Now') + '</button> ' +
 				'<button class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + _('Refresh Status') + '</button>' +
 				'</div>' +
