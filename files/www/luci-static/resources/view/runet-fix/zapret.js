@@ -6,12 +6,14 @@
 return view.extend({
 	load: function() {
 		return Promise.all([
-			fs.read('/usr/share/runet-fix/lists/zapret-hosts.txt').catch(function() { return ''; })
+			fs.read('/usr/share/runet-fix/lists/zapret-hosts.txt').catch(function() { return ''; }),
+			fs.read('/usr/share/runet-fix/lists/zapret-exclude.txt').catch(function() { return ''; })
 		]);
 	},
 
 	render: function(data) {
 		var hostlistContent = data[0] || '';
+		var excludelistContent = data[1] || '';
 
 		var m = new form.Map('runet-fix', _('Zapret (DPI Circumvention)'),
 			_('Configures nfqws packet desynchronization for unthrottling YouTube 4K, Discord voice & media, and ISP-blocked sites.'));
@@ -81,12 +83,26 @@ return view.extend({
 			_('Used only when Preset is set to "Custom". Example: --dpi-desync=fake,split2 --dpi-desync-split-pos=1'));
 		custom.depends('preset', 'custom');
 
-		// 2. Hostlist Section
+		// 2. Exclusion List Section (Russian domestic services, banks, Gosuslugi)
+		var s_exclude = m.section(form.NamedSection, 'zapret', 'zapret', _('Список исключений (Exclusion List)'),
+			_('Домены российских сервисов (банки, Госуслуги, платежные системы МИР), которые НЕ должны подвергаться десинхронизации пакетов. Все поддомены исключаются автоматически. По одному домену на строку.'));
+
+		var exhosts = s_exclude.option(form.TextValue, '_excludelist');
+		exhosts.rows = 12;
+		exhosts.wrap = 'off';
+		exhosts.cfgvalue = function() {
+			return excludelistContent;
+		};
+		exhosts.write = function(section_id, formvalue) {
+			return fs.write('/usr/share/runet-fix/lists/zapret-exclude.txt', formvalue.trim() + '\n');
+		};
+
+		// 3. Hostlist Section (Only used when Traffic Interception Scope is set to "Target Hostlist Only")
 		var s2 = m.section(form.NamedSection, 'zapret', 'zapret', _('Zapret Target Hostlist'),
 			_('Domains that are desynchronized when in "Target Hostlist Only" mode. One domain per line.'));
 
 		var hosts = s2.option(form.TextValue, '_hostlist');
-		hosts.rows = 14;
+		hosts.rows = 12;
 		hosts.wrap = 'off';
 		hosts.cfgvalue = function() {
 			return hostlistContent;

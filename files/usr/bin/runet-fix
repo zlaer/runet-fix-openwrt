@@ -1,0 +1,85 @@
+#!/bin/sh
+# /usr/bin/runet-fix - Unified CLI management tool for runet-fix
+# Part of the runet-fix all-in-one suite.
+
+case "$1" in
+    start)
+        /etc/init.d/runet-fix start
+        ;;
+    stop)
+        /etc/init.d/runet-fix stop
+        ;;
+    restart)
+        /etc/init.d/runet-fix restart
+        ;;
+    status)
+        /etc/init.d/runet-fix status_all
+        ;;
+    adblock|update-adblock)
+        /usr/share/runet-fix/scripts/update-adblock.sh
+        ;;
+    firewall)
+        /usr/share/runet-fix/scripts/runet-fix-firewall.sh status
+        ;;
+    test)
+        if [ "$2" = "--json" ]; then
+            yt_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
+            yt_code=$(echo "$yt_raw" | cut -d: -f1)
+            yt_time=$(echo "$yt_raw" | cut -d: -f2)
+            yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }")
+            yt_ok=0; [ "$yt_code" != "000" ] && [ -n "$yt_code" ] && yt_ok=1
+
+            dc_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
+            dc_code=$(echo "$dc_raw" | cut -d: -f1)
+            dc_time=$(echo "$dc_raw" | cut -d: -f2)
+            dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }")
+            dc_ok=0; [ "$dc_code" != "000" ] && [ -n "$dc_code" ] && dc_ok=1
+
+            tg_daemon=0
+            if netstat -tlpn 2>/dev/null | grep -q ":1443 "; then
+                tg_daemon=1
+            fi
+
+            dns_ok=0; if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then dns_ok=1; fi
+            ad_ok=0; if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then ad_ok=1; fi
+
+            cat <<EOF
+{
+  "youtube": {"ok": $yt_ok, "code": "$yt_code", "ms": $yt_ms},
+  "discord": {"ok": $dc_ok, "code": "$dc_code", "ms": $dc_ms},
+  "telegram": {"ok": $tg_daemon},
+  "dns": {"ok": $dns_ok, "adblock_ok": $ad_ok}
+}
+EOF
+            exit 0
+        fi
+
+        echo "=== [runet-fix Connectivity Diagnostics] ==="
+        echo -n "Checking DNS resolution (google.com)... "
+        if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then echo "OK"; else echo "FAIL"; fi
+
+        echo -n "Checking Adblock NXDOMAIN (ad.ae.doubleclick.net)... "
+        if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then echo "OK (Blocked)"; else echo "FAIL (Allowed)"; fi
+
+        echo -n "Testing YouTube HTTPS connection (port 443)... "
+        yt_test=$(curl -s -k -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "FAIL")
+        echo "$yt_test"
+
+        echo -n "Testing Discord Gateway (gateway.discord.gg:443)... "
+        dc_test=$(curl -s -k -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "FAIL")
+        echo "$dc_test"
+
+        echo -n "Testing Telegram local transparent proxy daemon (127.0.0.1:1443)... "
+        if netstat -tlpn 2>/dev/null | grep -q ":1443 "; then echo "OK (Listening)"; else echo "FAIL (Stopped)"; fi
+        echo "============================================="
+        ;;
+    log|logs)
+        logread -e "runet-fix" -e "tg-ws-proxy" -e "nfqws" | tail -n 50
+        ;;
+    *)
+        echo "runet-fix CLI - All-in-One DPI Bypass, Telegram Fix & Adblock"
+        echo "Usage: runet-fix {start|stop|restart|status|update-adblock|firewall|test|log}"
+        echo "       runet-fix test [--json]"
+        exit 1
+        ;;
+esac

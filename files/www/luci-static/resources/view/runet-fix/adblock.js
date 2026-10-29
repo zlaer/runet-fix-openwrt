@@ -41,17 +41,20 @@ return view.extend({
 			}
 		};
 
+		var ru = s.option(form.Flag, 'enable_ru', _('Подписка RU AdList (Яндекс.Директ, VK/Mail.ru трекеры, кинотеатры)'),
+			_('Добавляет специализированные фильтры блокировки русскоязычной рекламы, счетчиков и онлайн-видеоплееров.'));
+		ru.default = '1';
+
 		var profile = s.option(form.ListValue, 'profile', _('Filter Profile'),
-			_('Select filter intensity. Standard profile includes OISD Small and AdGuard RU filters.'));
-		profile.value('light', _('Light (OISD Small ~40k domains, minimum false positives)'));
-		profile.value('standard', _('Standard (OISD + AdGuard RU ~65k domains, blocks Russian banners)'));
-		profile.value('aggressive', _('Aggressive (OISD + AdGuard RU + Global Filters ~120k domains)'));
+			_('Select filter intensity. Standard profile includes StevenBlack Unified and Russian filters.'));
+		profile.value('standard', _('Standard (StevenBlack + RU AdList ~170k domains)'));
+		profile.value('aggressive', _('Aggressive (Standard + Anti-Coinminer protection)'));
 		profile.default = 'standard';
 
-		var schedule = s.option(form.ListValue, 'auto_update', _('Automatic List Update'),
+		var schedule = s.option(form.ListValue, 'auto_update', _('Automatic List Update (Cron)'),
 			_('Automatically downloads updated filter rules in background.'));
-		schedule.value('weekly', _('Weekly (Recommended)'));
-		schedule.value('daily', _('Daily'));
+		schedule.value('weekly', _('Weekly (Every Sunday at 04:00 - Recommended)'));
+		schedule.value('daily', _('Daily (Every night at 04:00)'));
 		schedule.value('disabled', _('Disabled (Manual update only)'));
 		schedule.default = 'weekly';
 

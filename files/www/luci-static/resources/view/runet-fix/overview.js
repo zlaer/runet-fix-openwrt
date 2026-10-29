@@ -79,6 +79,105 @@ return view.extend({
 				'</div>';
 		};
 
+		// Live RuNet Health Probe Diagnostics
+		var s_diag = m.section(form.NamedSection, 'main', 'global', _('Диагностика доступности сервисов (RuNet Health Probe)'));
+		var probe_ui = s_diag.option(form.DummyValue, '_health_probe');
+		probe_ui.rawhtml = true;
+		probe_ui.cfgvalue = function() {
+			return '<div id="probe-container" style="background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:14px;margin-top:6px;">' +
+				'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
+				'  <div>' +
+				'    <strong style="font-size:14px;color:#fff;">⚡ Проверка сетевых сервисов в реальном времени</strong><br>' +
+				'    <small style="color:#aaa;">Мгновенная проверка (1–2 сек): доступность YouTube 4K, Discord Gateway, Telegram туннеля и блокировки рекламы.</small>' +
+				'  </div>' +
+				'  <button class="btn cbi-button-action" id="btn-run-probe" style="padding:6px 16px;font-weight:bold;" onclick="window.runRuNetHealthProbe()">' + _('▶ Проверить сервисы (1 сек)') + '</button>' +
+				'</div>' +
+				'<div id="probe-results" style="display:none;margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">' +
+				'  <div id="card-yt" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">YouTube 4K (DPI)</div>' +
+				'    <div id="val-yt" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">Не проверялось</div>' +
+				'  </div>' +
+				'  <div id="card-dc" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">Discord Gateway</div>' +
+				'    <div id="val-dc" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">Не проверялось</div>' +
+				'  </div>' +
+				'  <div id="card-tg" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">Telegram WebSocket</div>' +
+				'    <div id="val-tg" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">Не проверялось</div>' +
+				'  </div>' +
+				'  <div id="card-dns" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">DNS &amp; Adblock</div>' +
+				'    <div id="val-dns" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">Не проверялось</div>' +
+				'  </div>' +
+				'</div>' +
+				'</div>' +
+				'<script>' +
+				'window.runRuNetHealthProbe = function() {' +
+				'  var btn = document.getElementById("btn-run-probe");' +
+				'  var resBox = document.getElementById("probe-results");' +
+				'  var vYt = document.getElementById("val-yt");' +
+				'  var vDc = document.getElementById("val-dc");' +
+				'  var vTg = document.getElementById("val-tg");' +
+				'  var vDns = document.getElementById("val-dns");' +
+				'  var cYt = document.getElementById("card-yt");' +
+				'  var cDc = document.getElementById("card-dc");' +
+				'  var cTg = document.getElementById("card-tg");' +
+				'  var cDns = document.getElementById("card-dns");' +
+				'  btn.disabled = true;' +
+				'  btn.innerText = "⏳ Замер...";' +
+				'  resBox.style.display = "grid";' +
+				'  vYt.innerHTML = "<span style=\'color:#ffc107;\'>Проверка...</span>";' +
+				'  vDc.innerHTML = "<span style=\'color:#ffc107;\'>Проверка...</span>";' +
+				'  vTg.innerHTML = "<span style=\'color:#ffc107;\'>Проверка...</span>";' +
+				'  vDns.innerHTML = "<span style=\'color:#ffc107;\'>Проверка...</span>";' +
+				'  fs.exec_direct("/usr/bin/runet-fix", ["test", "--json"]).then(function(res) {' +
+				'    btn.disabled = false;' +
+				'    btn.innerText = "▶ Проверить сервисы (1 сек)";' +
+				'    try {' +
+				'      var data = JSON.parse(res);' +
+				'      if (data.youtube && data.youtube.ok) {' +
+				'        vYt.innerHTML = "<span style=\'color:#28a745;\'>✔ Доступен</span> <small style=\'color:#aaa;\'>(" + data.youtube.ms + "ms)</small>";' +
+				'        cYt.style.borderLeftColor = "#28a745";' +
+				'      } else {' +
+				'        vYt.innerHTML = "<span style=\'color:#dc3545;\'>✖ Заблокирован</span>";' +
+				'        cYt.style.borderLeftColor = "#dc3545";' +
+				'      }' +
+				'      if (data.discord && data.discord.ok) {' +
+				'        vDc.innerHTML = "<span style=\'color:#28a745;\'>✔ Доступен</span> <small style=\'color:#aaa;\'>(" + data.discord.ms + "ms)</small>";' +
+				'        cDc.style.borderLeftColor = "#28a745";' +
+				'      } else {' +
+				'        vDc.innerHTML = "<span style=\'color:#dc3545;\'>✖ Недоступен</span>";' +
+				'        cDc.style.borderLeftColor = "#dc3545";' +
+				'      }' +
+				'      if (data.telegram && data.telegram.ok) {' +
+				'        vTg.innerHTML = "<span style=\'color:#28a745;\'>✔ Подключен</span> <small style=\'color:#aaa;\'> (Туннель :1443 активен)</small>";' +
+				'        cTg.style.borderLeftColor = "#28a745";' +
+				'      } else {' +
+				'        vTg.innerHTML = "<span style=\'color:#dc3545;\'>✖ Остановлен</span>";' +
+				'        cTg.style.borderLeftColor = "#dc3545";' +
+				'      }' +
+				'      if (data.dns && data.dns.ok && data.dns.adblock_ok) {' +
+				'        vDns.innerHTML = "<span style=\'color:#28a745;\'>✔ Активен</span> <small style=\'color:#aaa;\'> (Блокировка работает)</small>";' +
+				'        cDns.style.borderLeftColor = "#28a745";' +
+				'      } else if (data.dns && data.dns.ok) {' +
+				'        vDns.innerHTML = "<span style=\'color:#28a745;\'>✔ DNS OK</span>";' +
+				'        cDns.style.borderLeftColor = "#28a745";' +
+				'      } else {' +
+				'        vDns.innerHTML = "<span style=\'color:#dc3545;\'>✖ Ошибка DNS</span>";' +
+				'        cDns.style.borderLeftColor = "#dc3545";' +
+				'      }' +
+				'    } catch(e) {' +
+				'      vYt.innerHTML = "<span style=\'color:#dc3545;\'>Ошибка ответа</span>";' +
+				'    }' +
+				'  }).catch(function(err) {' +
+				'    btn.disabled = false;' +
+				'    btn.innerText = "▶ Проверить сервисы (1 сек)";' +
+				'    vYt.innerHTML = "<span style=\'color:#dc3545;\'>Ошибка RPC: " + err + "</span>";' +
+				'  });' +
+				'};' +
+				'</script>';
+		};
+
 		// Quick Action Buttons
 		var actions = s.option(form.DummyValue, '_actions', _('Quick Actions'));
 		actions.rawhtml = true;

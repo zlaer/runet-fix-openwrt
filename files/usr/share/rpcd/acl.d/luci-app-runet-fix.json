@@ -8,6 +8,7 @@
 				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "read" ],
+				"/usr/share/runet-fix/lists/zapret-exclude.txt": [ "read" ],
 				"/tmp/runet-fix-adblock.count": [ "read" ],
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read", "stat" ],
 				"/usr/bin/runet-fix": [ "exec" ],
@@ -26,6 +27,7 @@
 				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "write" ],
 				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "write" ],
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "write" ],
+				"/usr/share/runet-fix/lists/zapret-exclude.txt": [ "write" ],
 				"/usr/bin/runet-fix": [ "exec" ]
 			},
 			"ubus": {

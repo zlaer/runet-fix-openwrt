@@ -141,7 +141,19 @@ start_service() {
             local preset=$(uci -q get runet-fix.zapret.preset || echo "flowseal_general")
             local qnum=$(uci -q get runet-fix.zapret.qnum || echo "200")
             local custom_args=$(uci -q get runet-fix.zapret.custom_args || echo "")
+            local mode=$(uci -q get runet-fix.zapret.mode || echo "all")
             local args=$(get_zapret_args "$preset" "$qnum" "$custom_args")
+
+            local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
+            local excludelist="/usr/share/runet-fix/lists/zapret-exclude.txt"
+
+            if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
+                args="$args --hostlist=$hostlist"
+            fi
+
+            if [ -s "$excludelist" ]; then
+                args="$args --hostlist-exclude=$excludelist"
+            fi
 
             echo "[runet-fix] Launching $nfq_bin (preset: $preset)..."
             procd_open_instance "zapret"
