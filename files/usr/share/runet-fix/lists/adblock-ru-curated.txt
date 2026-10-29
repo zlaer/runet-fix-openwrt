@@ -1,35 +1,5 @@
 # adblock-ru-curated.txt - Curated Russian Adserver, Tracker & Telemetry Domains
-# Specifically tuned for Yandex Direct (РСЯ), Mail.ru/VK Ads, Rambler, and media trackers.
-
-# Yandex Advertising Network (РСЯ / Директ)
-an.yandex.ru
-yabs.yandex.ru
-bs.yandex.ru
-adfox.ru
-adfox.yandex.ru
-ads.adfox.ru
-banners.adfox.ru
-matchid.adfox.yandex.ru
-direct.yandex.ru
-clck.yandex.ru
-awaps.yandex.ru
-awaps.yandex.net
-ads.yandex.ru
-adfstat.yandex.ru
-offer.yandex.ru
-extstat.yandex.net
-yandexadexchange.net
-kiks.yandex.ru
-appmetrica.yandex.com
-appmetrica.yandex.net
-metrika.yandex.ru
-mc.yandex.ru
-mc.yandex.md
-mc.yandex.by
-mc.yandex.kz
-mc.webvisor.org
-webvisor.com
-ads.yandex.com
+# Mail.ru/VK Ads, Rambler, teasers, and media trackers. (Yandex excluded per user request)
 
 # Mail.ru, VK & MyTarget Advertising
 ad.mail.ru
@@ -117,7 +87,6 @@ rollerads.com
 richads.com
 trafee.com
 rtmark.net
-clckr.ru
 
 # Web Counters & Analytics
 tns-counter.ru

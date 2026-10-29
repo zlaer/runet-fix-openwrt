@@ -9,6 +9,9 @@ Features:
 - Full compatibility with MTProto Obfuscated2, Abridged, Intermediate, Padded
 - Fallback MTProto proxy mode (Fake-TLS / Secret) for direct proxy clients
 - Multi-domain Cloudflare WebSocket tunnel relay with auto-balancing and health checks
+- Cloudflare Workers (/apiws?dst=...&dc=...) tunnel relay support
+- Non-MTProto (HTTP GET/POST, TLS) transparent pass-through (e.g. for web.telegram.org)
+- Direct TCP fallback with on-the-fly re-encryption when CF relays are unavailable
 - Pure zero-external-dependency async WebSocket client (standard library asyncio + ssl)
 - Hardware accelerated OpenSSL AES-256-CTR via ctypes with auto-detection
 - Minimal memory and CPU consumption for resource-constrained OpenWrt routers
@@ -26,6 +29,7 @@ import logging
 import argparse
 import base64
 import ssl
+import re
 from typing import Optional, Dict, List, Tuple
 
 # Set up logging
@@ -73,29 +77,9 @@ DC_DEFAULT_IPS: Dict[int, str] = {
     5: '91.108.56.165'
 }
 
-# Verified active community Cloudflare relay domains
-DEFAULT_CF_DOMAINS = [
-    'pclead.co.uk',
-    'offshor.co.uk',
-    'cakeisalie.co.uk',
-    'noskomnadzor.co.uk',
-    'lovetrue.co.uk',
-    'sorokdva.co.uk',
-    'pyatdesyatdva.co.uk',
-    'kartoshka.co.uk',
-    'sorokodin.co.uk',
-    'pyatdesyatodin.co.uk',
-    'notelega.co.uk',
-    'ebally.co.uk',
-    'nebally.co.uk',
-    'havegreatday.co.uk',
-    'pomogite.co.uk',
-    'fixtelega.co.uk',
-    'sadnews.co.uk',
-    'onedaychamp.co.uk',
-    'stopblocking.co.uk',
-    'nothingthere.co.uk'
-]
+# Default community relay domains pool
+DEFAULT_CF_DOMAINS: List[str] = []
+
 
 # ==============================================================================
 # Multi-Backend AES-256-CTR Implementation
@@ -205,7 +189,10 @@ class AES256CTR:
 
     def __del__(self):
         if self.backend == 'libcrypto' and hasattr(self, 'ctx') and self.ctx:
-            self._libcrypto.EVP_CIPHER_CTX_free(self.ctx)
+            try:
+                self._libcrypto.EVP_CIPHER_CTX_free(self.ctx)
+            except Exception:
+                pass
             self.ctx = None
 
 
@@ -364,7 +351,7 @@ class RawWebSocket:
         )
         set_sock_opts(writer.transport)
 
-        # Standard WebSocket HTTP Upgrade handshake with Sec-WebSocket-Protocol: binary
+        # Standard WebSocket HTTP Upgrade handshake
         ws_key = base64.b64encode(os.urandom(16)).decode('ascii')
         request = (
             f"GET {path} HTTP/1.1\r\n"
@@ -550,7 +537,6 @@ def try_handshake_transparent(handshake: bytes) -> Optional[Tuple[int, bool, byt
     dec_prekey = handshake[SKIP_LEN:SKIP_LEN + PREKEY_LEN]
     dec_iv = handshake[SKIP_LEN + PREKEY_LEN:SKIP_LEN + PREKEY_LEN + IV_LEN]
 
-    # In direct connections, raw 32-byte key is used directly (no secret hash)
     decryptor = AES256CTR(dec_prekey, dec_iv)
     decrypted = decryptor.update(handshake)
 
@@ -604,7 +590,6 @@ def build_crypto_context(client_prekey_iv: bytes, secret: Optional[bytes],
         clt_enc_key = hashlib.sha256(clt_enc_prekey_iv[:PREKEY_LEN] + secret).digest()
         clt_enc_iv = clt_enc_prekey_iv[PREKEY_LEN:]
     else:
-        # Transparent mode: raw key without secret hash
         clt_dec_key = clt_dec_prekey
         clt_enc_prekey_iv = client_prekey_iv[::-1]
         clt_enc_key = clt_enc_prekey_iv[:PREKEY_LEN]
@@ -634,10 +619,9 @@ class TelegramTransparentProxy:
         self.host = host
         self.port = port
         self.secret = bytes.fromhex(secret) if secret else None
-        self.cf_domains = custom_cf_domains or DEFAULT_CF_DOMAINS
-        self.worker_domains = worker_domains or []
+        self.cf_domains = [d.strip() for d in custom_cf_domains if d.strip()] if custom_cf_domains else list(DEFAULT_CF_DOMAINS)
+        self.worker_domains = [w.strip() for w in worker_domains if w.strip()] if worker_domains else []
         self._dc_working_domain: Dict[int, str] = {}
-        self._domain_idx = 0
         self.stats = {
             'connections_total': 0,
             'connections_active': 0,
@@ -661,12 +645,10 @@ class TelegramTransparentProxy:
         if not ip_str:
             return 2  # Default to DC2
 
-        # Direct DC IP mappings
         for dc, dc_ip in DC_DEFAULT_IPS.items():
             if ip_str == dc_ip:
                 return dc
 
-        # Subnet heuristics
         if ip_str.startswith('149.154.175.'):
             return 1 if int(ip_str.split('.')[-1]) < 75 else 3
         if ip_str.startswith('149.154.167.') or ip_str.startswith('149.154.166.'):
@@ -682,7 +664,7 @@ class TelegramTransparentProxy:
 
     async def _bridge_streams(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                              ws: RawWebSocket, ctx: CryptoCtx, splitter: MsgSplitter, label: str):
-        """Full-duplex bidirectional stream forwarder with on-the-fly re-encryption."""
+        """Full-duplex bidirectional stream forwarder with on-the-fly re-encryption (WebSocket)."""
         
         async def client_to_ws():
             try:
@@ -731,6 +713,75 @@ class TelegramTransparentProxy:
                 t.cancel()
             await ws.close()
 
+    async def _bridge_tcp(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                          remote_reader: asyncio.StreamReader, remote_writer: asyncio.StreamWriter,
+                          ctx: CryptoCtx, label: str):
+        """Bidirectional TCP <-> TCP with re-encryption (Direct DC Fallback)."""
+        async def client_to_remote():
+            try:
+                while True:
+                    chunk = await reader.read(65536)
+                    if not chunk:
+                        break
+                    self.stats['bytes_up'] += len(chunk)
+                    plain = ctx.clt_dec.update(chunk)
+                    re_enc = ctx.tg_enc.update(plain)
+                    remote_writer.write(re_enc)
+                    await remote_writer.drain()
+            except Exception as e:
+                log.debug("[%s] Client -> DC closed: %s", label, e)
+
+        async def remote_to_client():
+            try:
+                while True:
+                    chunk = await remote_reader.read(65536)
+                    if not chunk:
+                        break
+                    self.stats['bytes_down'] += len(chunk)
+                    plain = ctx.tg_dec.update(chunk)
+                    re_enc = ctx.clt_enc.update(plain)
+                    writer.write(re_enc)
+                    await writer.drain()
+            except Exception as e:
+                log.debug("[%s] DC -> Client closed: %s", label, e)
+
+        tasks = [asyncio.create_task(client_to_remote()), asyncio.create_task(remote_to_client())]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for t in tasks:
+                t.cancel()
+            try:
+                remote_writer.close()
+                await remote_writer.wait_closed()
+            except Exception:
+                pass
+
+    async def _raw_pipe(self, r1: asyncio.StreamReader, w1: asyncio.StreamWriter,
+                        r2: asyncio.StreamReader, w2: asyncio.StreamWriter):
+        """Raw bidirectional byte pipe for non-MTProto pass-through (e.g. web.telegram.org)."""
+        async def fwd(src, dst):
+            try:
+                while True:
+                    data = await src.read(65536)
+                    if not data:
+                        break
+                    dst.write(data)
+                    await dst.drain()
+            except Exception:
+                pass
+
+        t1 = asyncio.create_task(fwd(r1, w2))
+        t2 = asyncio.create_task(fwd(r2, w1))
+        await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+        t1.cancel()
+        t2.cancel()
+        for w in (w1, w2):
+            try:
+                w.close()
+            except Exception:
+                pass
+
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.stats['connections_total'] += 1
         self.stats['connections_active'] += 1
@@ -748,13 +799,13 @@ class TelegramTransparentProxy:
                 port, ip_bytes = struct.unpack("!2xH4s8x", dst)
                 orig_dest_ip = socket.inet_ntoa(ip_bytes)
                 orig_dest_port = port
-                log.info("[%s] Intercepted transparent TCP -> %s:%d", label, orig_dest_ip, orig_dest_port)
+                log.debug("[%s] Intercepted transparent TCP -> %s:%d", label, orig_dest_ip, orig_dest_port)
         except Exception:
             pass
 
         try:
             # Read MTProto handshake (64 bytes)
-            handshake = await asyncio.wait_for(reader.readexactly(HANDSHAKE_LEN), timeout=10.0)
+            handshake = await asyncio.wait_for(reader.readexactly(HANDSHAKE_LEN), timeout=8.0)
             
             # Step 1: Try transparent direct handshake (standard Telegram without proxy)
             res = try_handshake_transparent(handshake)
@@ -767,12 +818,25 @@ class TelegramTransparentProxy:
                 is_transparent = False
                 secret_used = self.secret
 
+            # If not MTProto, check if it's plain HTTP or TLS to Telegram IP (e.g. web.telegram.org)
             if res is None:
-                # If handshake looks like HTTP (e.g. POST /api), client gave up on MTProto
-                if handshake[:4] in (b'POST', b'GET ', b'HEAD'):
-                    log.warning("[%s] Non-MTProto HTTP transport detected (%s), skipping", label, handshake[:4].decode('latin1', 'ignore'))
-                else:
-                    log.warning("[%s] Unknown handshake packet (not valid MTProto)", label)
+                if orig_dest_ip and orig_dest_port and (handshake[:4] in (b'POST', b'GET ', b'HEAD') or handshake[0] == 0x16):
+                    log.info("[%s] Forwarding non-MTProto HTTP/TLS to %s:%d", label, orig_dest_ip, orig_dest_port)
+                    try:
+                        remote_reader, remote_writer = await asyncio.wait_for(
+                            asyncio.open_connection(orig_dest_ip, orig_dest_port), timeout=6.0
+                        )
+                        set_sock_opts(remote_writer.transport)
+                        remote_writer.write(handshake)
+                        await remote_writer.drain()
+                        await self._raw_pipe(reader, writer, remote_reader, remote_writer)
+                    except Exception as ex:
+                        log.debug("[%s] Direct HTTP/TLS forward failed: %s", label, ex)
+                    finally:
+                        writer.close()
+                    return
+
+                log.warning("[%s] Unknown handshake packet (not valid MTProto)", label)
                 writer.close()
                 return
 
@@ -789,36 +853,91 @@ class TelegramTransparentProxy:
             log.info("[%s] Telegram DC%d%s session (transparent=%s, proto=0x%08X)",
                      label, dc_id, " media" if is_media else "", is_transparent, proto_int)
 
-            # Generate fresh MTProto handshake for the Cloudflare WebSocket tunnel
+            # Generate fresh MTProto handshake for upstream
             dc_idx = -dc_id if is_media else dc_id
             relay_init, r_enc_k, r_enc_iv, r_dec_k, r_dec_iv = generate_relay_init(proto_tag, dc_idx)
 
             ctx = build_crypto_context(prekey_iv, secret_used, r_enc_k, r_enc_iv, r_dec_k, r_dec_iv)
             splitter = MsgSplitter(proto_int)
 
-            # Connect to Cloudflare WebSocket endpoint
-            ws = None
-            candidate_domains = self._get_candidate_domains(dc_id)
-            for base_domain in candidate_domains[:6]:
-                domain = f"kws{dc_id}.{base_domain}"
-                try:
-                    log.debug("[%s] Tunneling DC%d via wss://%s/apiws", label, dc_id, domain)
-                    ws = await RawWebSocket.connect(domain, 443, "/apiws", domain, timeout=5.0)
-                    self._dc_working_domain[dc_id] = base_domain
-                    break
-                except Exception as ex:
-                    log.warning("[%s] Relay %s failed: %s, trying another...", label, domain, ex)
+            target_ip = DC_DEFAULT_IPS.get(dc_id, '149.154.167.51')
 
-            if ws is None:
-                log.error("[%s] All Cloudflare WebSocket relays failed for DC%d", label, dc_id)
-                writer.close()
+            # If no CF Workers or custom domains are configured, pass through transparently
+            if not self.worker_domains and not self.cf_domains:
+                dst_host = orig_dest_ip if orig_dest_ip else target_ip
+                dst_port = orig_dest_port if orig_dest_port else 443
+                log.info("[%s] No CF relays configured. Transparent pass-through to %s:%d", label, dst_host, dst_port)
+                try:
+                    remote_reader, remote_writer = await asyncio.wait_for(
+                        asyncio.open_connection(dst_host, dst_port), timeout=6.0
+                    )
+                    set_sock_opts(remote_writer.transport)
+                    remote_writer.write(handshake)
+                    await remote_writer.drain()
+                    await self._raw_pipe(reader, writer, remote_reader, remote_writer)
+                    return
+                except Exception as ex:
+                    log.debug("[%s] Direct pass-through to %s:%d failed: %s", label, dst_host, dst_port, ex)
+                    writer.close()
+                    return
+
+            ws = None
+
+            # 1. Try Cloudflare Workers (format: wss://{worker}/apiws?dst={target_ip}&dc={dc_id})
+            if self.worker_domains:
+                for worker in self.worker_domains:
+                    path = f"/apiws?dst={target_ip}&dc={dc_id}"
+                    try:
+                        log.info("[%s] Connecting DC%d via CF worker %s", label, dc_id, worker)
+                        ws = await RawWebSocket.connect(worker, 443, path, worker, timeout=6.0)
+                        log.info("[%s] Connected to CF worker %s successfully", label, worker)
+                        break
+                    except Exception as ex:
+                        log.warning("[%s] CF worker %s failed: %s", label, worker, ex)
+
+            # 2. Try Custom Cloudflare Domains (format: wss://kws{dc}.{domain}/apiws)
+            if ws is None and self.cf_domains:
+                candidate_domains = self._get_candidate_domains(dc_id)
+                for base_domain in candidate_domains[:6]:
+                    domain = f"kws{dc_id}.{base_domain}"
+                    try:
+                        log.info("[%s] Connecting DC%d via CF domain %s", label, dc_id, domain)
+                        ws = await RawWebSocket.connect(domain, 443, "/apiws", domain, timeout=5.0)
+                        self._dc_working_domain[dc_id] = base_domain
+                        log.info("[%s] Connected to CF domain %s successfully", label, domain)
+                        break
+                    except Exception as ex:
+                        log.debug("[%s] Relay %s failed: %s", label, domain, ex)
+
+            if ws is not None:
+                await ws.send(relay_init)
+                await self._bridge_streams(reader, writer, ws, ctx, splitter, label)
                 return
 
-            # Send relay handshake to start Telegram session over WebSocket
-            await ws.send(relay_init)
+            # 3. Fallback: Direct TCP connection to Telegram DC
+            log.info("[%s] CF relays unavailable, trying direct TCP -> %s:443", label, target_ip)
+            tcp_conn = None
+            for port in (443, 80, 5222):
+                try:
+                    rr, rw = await asyncio.wait_for(
+                        asyncio.open_connection(target_ip, port), timeout=4.0
+                    )
+                    set_sock_opts(rw.transport)
+                    rw.write(relay_init)
+                    await rw.drain()
+                    tcp_conn = (rr, rw)
+                    log.info("[%s] Connected to Telegram DC%d directly via %s:%d", label, dc_id, target_ip, port)
+                    break
+                except Exception as ex:
+                    log.debug("[%s] Direct TCP to %s:%d failed: %s", label, target_ip, port, ex)
 
-            # Full duplex bridge
-            await self._bridge_streams(reader, writer, ws, ctx, splitter, label)
+            if tcp_conn is not None:
+                rr, rw = tcp_conn
+                await self._bridge_tcp(reader, writer, rr, rw, ctx, label)
+                return
+
+            log.error("[%s] All connection methods failed for DC%d (CF Workers, CF Domains, Direct TCP)", label, dc_id)
+            writer.close()
 
         except Exception as e:
             log.debug("[%s] Client error: %s", label, e)
@@ -833,8 +952,8 @@ class TelegramTransparentProxy:
     async def run(self):
         AES256CTR.init_backend()
         server = await asyncio.start_server(self.handle_client, self.host, self.port)
-        log.info("Telegram Transparent Proxy running on %s:%d (CF relays: %d domains)",
-                 self.host, self.port, len(self.cf_domains))
+        log.info("Telegram Transparent Proxy running on %s:%d (Workers: %d, Domains: %d)",
+                 self.host, self.port, len(self.worker_domains), len(self.cf_domains))
         async with server:
             await server.serve_forever()
 
@@ -847,8 +966,8 @@ def main():
     parser.add_argument('-l', '--host', default='0.0.0.0', help="Listen address (default: 0.0.0.0)")
     parser.add_argument('-p', '--port', type=int, default=1443, help="Listen port (default: 1443)")
     parser.add_argument('-s', '--secret', default=None, help="Optional MTProxy hex secret for dual mode")
-    parser.add_argument('-d', '--domains', default=None, help="Comma-separated custom Cloudflare domains")
-    parser.add_argument('-w', '--workers', default=None, help="Comma-separated custom Cloudflare workers")
+    parser.add_argument('-d', '--domains', default=None, help="Comma/space-separated custom Cloudflare domains")
+    parser.add_argument('-w', '--workers', default=None, help="Comma/space-separated custom Cloudflare workers")
     parser.add_argument('-v', '--verbose', action='store_true', help="Enable debug logging")
 
     args = parser.parse_args()
@@ -856,8 +975,8 @@ def main():
     if args.verbose:
         log.setLevel(logging.DEBUG)
 
-    domains = [d.strip() for d in args.domains.split(',')] if args.domains else None
-    workers = [w.strip() for w in args.workers.split(',')] if args.workers else None
+    domains = [d.strip() for d in re.split(r'[,;\s]+', args.domains) if d.strip()] if args.domains else None
+    workers = [w.strip() for w in re.split(r'[,;\s]+', args.workers) if w.strip()] if args.workers else None
 
     proxy = TelegramTransparentProxy(
         host=args.host,

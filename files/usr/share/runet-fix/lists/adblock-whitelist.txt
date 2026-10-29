@@ -1,5 +1,5 @@
 # Domains that should NEVER be blocked by Adblock
-# One domain per line
+# Subdomains of listed domains are automatically protected
 google.com
 youtube.com
 googlevideo.com
@@ -13,6 +13,11 @@ githubusercontent.com
 cloudflare.com
 yandex.ru
 ya.ru
+yandex.net
+yandex.com
+yandex.by
+yandex.kz
+adfox.ru
 gosuslugi.ru
 sberbank.ru
 tinkoff.ru

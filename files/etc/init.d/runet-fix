@@ -194,11 +194,10 @@ start_service() {
             procd_set_param command "$TG_C_BIN" -p "$tg_port"
         else
             echo "[runet-fix] Launching Python Telegram transparent proxy on port $tg_port..."
-            local py_cmd="python3 $TG_PY_SCRIPT -p $tg_port"
-            [ -n "$tg_secret" ] && py_cmd="$py_cmd -s $tg_secret"
-            [ -n "$custom_domains" ] && py_cmd="$py_cmd -d $custom_domains"
-            [ -n "$custom_workers" ] && py_cmd="$py_cmd -w $custom_workers"
             procd_set_param command python3 "$TG_PY_SCRIPT" -p "$tg_port"
+            [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
+            [ -n "$custom_domains" ] && procd_append_param command -d "$custom_domains"
+            [ -n "$custom_workers" ] && procd_append_param command -w "$custom_workers"
         fi
         procd_set_param respawn 3600 5 0
         procd_set_param stdout 1

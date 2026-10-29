@@ -69,8 +69,10 @@ start_nft() {
     if [ "$zapret_enabled" = "1" ]; then
         nft "add chain inet $TABLE_NAME zapret_mangle { type filter hook forward priority mangle; policy accept; }"
         
-        # Exclude Telegram subnets from NFQUEUE
-        nft "add rule inet $TABLE_NAME zapret_mangle ip daddr @telegram_v4 return"
+        # Exclude Telegram subnets from forward NFQUEUE only if tg-ws-proxy is handling them
+        if [ "$tg_enabled" = "1" ]; then
+            nft "add rule inet $TABLE_NAME zapret_mangle ip daddr @telegram_v4 return"
+        fi
         
         # Exclude local private LAN subnets
         nft "add rule inet $TABLE_NAME zapret_mangle ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
@@ -88,7 +90,6 @@ start_nft() {
 
         # Local output mangle (so router itself benefits from desync and health probe works)
         nft "add chain inet $TABLE_NAME zapret_mangle_out { type filter hook output priority mangle; policy accept; }"
-        nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr @telegram_v4 return"
         nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
         nft "add rule inet $TABLE_NAME zapret_mangle_out meta mark 0x40000000 return"
         nft "add rule inet $TABLE_NAME zapret_mangle_out tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass"
@@ -151,7 +152,9 @@ start_ipt() {
     # Zapret NFQUEUE
     if [ "$zapret_enabled" = "1" ]; then
         iptables -t mangle -N RUNET_ZAPRET 2>/dev/null || iptables -t mangle -F RUNET_ZAPRET
-        iptables -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
+        if [ "$tg_enabled" = "1" ]; then
+            iptables -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
+        fi
         iptables -t mangle -A RUNET_ZAPRET -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8 -j RETURN
         iptables -t mangle -A RUNET_ZAPRET -p tcp -m multiport --dports 80,443 -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         if [ "$discord_fix" = "1" ]; then

@@ -7,49 +7,49 @@
 var I18N = {
 	ru: {
 		title: 'Прозрачный обход блокировок Telegram (tg-ws-proxy)',
-		desc: 'Прозрачно перенаправляет и инкапсулирует весь трафик Telegram в WebSockets Cloudflare, полностью обходя замедление и блокировки ТСПУ без настройки прокси на клиентских устройствах.',
+		desc: 'Прозрачно перенаправляет трафик Telegram через реле WebSocket / Cloudflare Worker, полностью обходя замедление и блокировки ТСПУ без настройки прокси на клиентских устройствах.',
 		lang_label: 'Язык:',
 		section_title: 'Настройки прозрачного перенаправления',
 		enable: 'Включить прозрачный прокси Telegram',
-		enable_desc: 'Перехватывает исходящие соединения с дата-центрами Telegram и туннелирует их через реле WebSocket.',
+		enable_desc: 'Перехватывает исходящие соединения с дата-центрами Telegram и туннелирует их через реле WebSocket / Worker.',
 		how_it_works_title: 'Как работает прозрачный режим:',
-		how_it_works_text: 'Все устройства в вашей домашней сети (смартфоны, планшеты, ПК) будут подключаться к Telegram на максимальной скорости автоматически. Вам НЕ нужно устанавливать или настраивать прокси в самом приложении Telegram!',
-		engine: 'Движок прокси',
-		engine_desc: 'Выберите среду выполнения. Нативный бинарник C обеспечивает минимальное потребление ОЗУ (~1.2 МБ); Python обеспечивает гибкую балансировку asyncio.',
-		engine_auto: 'Автоопределение (C при наличии, иначе Python)',
-		engine_c: 'Нативный демон C (tg-transproxy, ~1.2 МБ ОЗУ)',
-		engine_py: 'Демон Python Asyncio (tg_ws_transparent.py)',
+		how_it_works_text: 'Все устройства в вашей домашней сети (смартфоны, планшеты, ПК) будут подключаться к Telegram на максимальной скорости автоматически. Настраивать прокси в самом приложении Telegram НЕ требуется.',
+		worker_guide_title: 'Инструкция: как создать собственный бесплатный Cloudflare Worker (2 минуты):',
+		worker_guide_text: '1. Зарегистрируйтесь на dash.cloudflare.com и перейдите в <b>Workers & Pages</b> → <b>Create application</b>.<br>' +
+			'2. Нажмите <b>Create Worker</b> → <b>Deploy</b> → затем <b>Edit code</b>.<br>' +
+			'3. Вставьте стандартный скрипт вебсокет-моста (import { connect } from "cloudflare:sockets" ... connect({ hostname: dst, port: 443 })).<br>' +
+			'4. Скопируйте полученный домен <code>*.workers.dev</code> и вставьте в поле <b>Cloudflare Workers</b> ниже.',
 		port: 'Локальный порт перенаправления',
-		port_desc: 'Внутренний порт роутера, на который файрвол перенаправляет трафик Telegram.',
-		domains: 'Пользовательские домены-реле Cloudflare',
-		domains_desc: 'Список базовых доменов-реле Cloudflare через запятую. Оставьте пустым для использования активного пула сообщества.',
-		workers: 'Пользовательские эндпоинты Cloudflare Workers',
-		workers_desc: 'Опциональные приватные воркеры Cloudflare для выделенного туннелирования.',
+		port_desc: 'Внутренний порт роутера, на который файрвол перенаправляет трафик Telegram (по умолчанию 1443).',
+		workers: 'Cloudflare Workers (Рекомендуется)',
+		workers_desc: 'Адрес вашего бесплатного Cloudflare Worker (например: my-tg.username.workers.dev). Обеспечивает 100% стабильный обход замедлений и мгновенную загрузку медиа. Можно указать несколько через запятую.',
+		domains: 'Пользовательские домены Cloudflare (CfProxy)',
+		domains_desc: 'Собственные домены, привязанные к Cloudflare (kws1..kws5). Оставьте пустым, если используете Cloudflare Worker.',
 		secret: 'Секрет MTProxy (опционально, Dual Mode)',
-		secret_desc: 'Если указан, прокси также будет принимать стандартные подключения MTProto с этим секретом, продолжая прозрачную маршрутизацию.'
+		secret_desc: 'Если указан 32-значный hex-секрет, прокси также принимает ручные подключения по ссылке tg://proxy?server=IP&port=1443&secret=...'
 	},
 	en: {
 		title: 'Telegram Transparent Bypass (tg-ws-proxy)',
-		desc: 'Transparently redirects and encapsulates all Telegram traffic into Cloudflare WebSockets, completely bypassing TSPU throttling and blocking without requiring any proxy setup on client devices.',
+		desc: 'Transparently redirects Telegram traffic via WebSocket relays / Cloudflare Worker, completely bypassing TSPU throttling and blocking without requiring proxy configuration on client devices.',
 		lang_label: 'Language:',
 		section_title: 'Transparent Redirection Settings',
 		enable: 'Enable Telegram Transparent Proxy',
-		enable_desc: 'Intercepts outgoing Telegram DC connections and tunnels them over WebSocket relays.',
+		enable_desc: 'Intercepts outgoing Telegram DC connections and tunnels them over WebSocket / Worker relays.',
 		how_it_works_title: 'How Transparent Mode Works:',
-		how_it_works_text: 'All devices connected to this router (smartphones, tablets, PCs) will connect to Telegram at full speed automatically. You DO NOT need to install or configure any proxy in the Telegram app!',
-		engine: 'Proxy Engine Backend',
-		engine_desc: 'Choose execution runtime. Native C offers extreme memory efficiency (~1.2MB RAM); Python offers rich asyncio balancing.',
-		engine_auto: 'Auto-detect (Native C if present, else Python)',
-		engine_c: 'Native C Daemon (tg-transproxy, ~1.2MB RAM)',
-		engine_py: 'Python Asyncio Daemon (tg_ws_transparent.py)',
+		how_it_works_text: 'All devices connected to this router (smartphones, tablets, PCs) connect to Telegram at full speed automatically. No manual proxy setup inside the Telegram app is needed.',
+		worker_guide_title: 'Guide: How to set up a free Cloudflare Worker (2 minutes):',
+		worker_guide_text: '1. Log into dash.cloudflare.com and go to <b>Workers & Pages</b> → <b>Create application</b>.<br>' +
+			'2. Click <b>Create Worker</b> → <b>Deploy</b> → then <b>Edit code</b>.<br>' +
+			'3. Paste the standard websocket bridge script (import { connect } from "cloudflare:sockets" ... connect({ hostname: dst, port: 443 })).<br>' +
+			'4. Copy your resulting <code>*.workers.dev</code> domain and paste it into the <b>Cloudflare Workers</b> field below.',
 		port: 'Local Redirection Port',
-		port_desc: 'Internal port where intercepted Telegram traffic is redirected by firewall.',
-		domains: 'Custom Cloudflare Relay Domains',
-		domains_desc: 'Comma-separated list of Cloudflare relay base domains. Leave empty to use community active pool.',
-		workers: 'Custom Cloudflare Worker Endpoints',
-		workers_desc: 'Optional custom Cloudflare Workers for private dedicated relaying.',
-		secret: 'Optional MTProxy Secret (Dual Mode)',
-		secret_desc: 'If configured, the proxy will also accept traditional MTProto proxy connections with this secret, while still handling transparent connections.'
+		port_desc: 'Internal router port where intercepted Telegram traffic is redirected (default: 1443).',
+		workers: 'Cloudflare Workers (Recommended)',
+		workers_desc: 'Address of your free Cloudflare Worker (e.g. my-tg.username.workers.dev). Provides 100% reliable bypass of throttling and instant photo/video loading. Multiple can be comma-separated.',
+		domains: 'Custom Cloudflare Domains (CfProxy)',
+		domains_desc: 'Custom domains pointed to Cloudflare (kws1..kws5). Leave empty if using Cloudflare Worker.',
+		secret: 'MTProxy Secret (Optional, Dual Mode)',
+		secret_desc: 'Optional 32-character hex secret allowing manual connections via tg://proxy?server=IP&port=1443&secret=...'
 	}
 };
 
@@ -109,27 +109,25 @@ return view.extend({
 		var desc = s.option(form.DummyValue, '_desc');
 		desc.rawhtml = true;
 		desc.cfgvalue = function() {
-			return '<div class="alert-message notice" style="margin-top:5px;margin-bottom:15px;">' +
+			return '<div class="alert-message notice" style="margin-top:5px;margin-bottom:10px;">' +
 				'<strong>' + t.how_it_works_title + '</strong><br>' +
 				t.how_it_works_text +
+				'</div>' +
+				'<div class="alert-message info" style="margin-top:5px;margin-bottom:15px;font-size:12px;line-height:1.6;">' +
+				'<strong>' + t.worker_guide_title + '</strong><br>' +
+				t.worker_guide_text +
 				'</div>';
 		};
 
-		var engine = s.option(form.ListValue, 'engine', t.engine, t.engine_desc);
-		engine.value('auto', t.engine_auto);
-		engine.value('c_native', t.engine_c);
-		engine.value('python', t.engine_py);
-		engine.default = 'auto';
+		var workers = s.option(form.Value, 'custom_workers', t.workers, t.workers_desc);
+		workers.placeholder = 'my-tg-worker.username.workers.dev';
+
+		var domains = s.option(form.Value, 'custom_domains', t.domains, t.domains_desc);
+		domains.placeholder = 'mydomain.com';
 
 		var port = s.option(form.Value, 'port', t.port, t.port_desc);
 		port.datatype = 'port';
 		port.default = '1443';
-
-		var domains = s.option(form.Value, 'custom_domains', t.domains, t.domains_desc);
-		domains.placeholder = 'virkgj.co.uk, vmmzovy.co.uk';
-
-		var workers = s.option(form.Value, 'custom_workers', t.workers, t.workers_desc);
-		workers.placeholder = 'my-tg-worker.yourname.workers.dev';
 
 		var secret = s.option(form.Value, 'secret', t.secret, t.secret_desc);
 		secret.placeholder = 'e.g. ee00112233445566778899aabbccddeeff';

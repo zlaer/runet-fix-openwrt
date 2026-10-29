@@ -120,9 +120,9 @@ awk '
     }
 ' "$TEMP_RAW" > "$TEMP_DOMAINS"
 
-# Apply whitelist if present (exact domain matching only, ignoring comments and whitespace)
+# Apply whitelist if present (exact domain and parent domain wildcard matching)
 if [ -s "$WHITELIST" ]; then
-    echo "[runet-fix:adblock] Applying whitelist (exact match)..."
+    echo "[runet-fix:adblock] Applying whitelist (with subdomain protection)..."
     awk '
         NR == FNR {
             sub(/[#;!].*$/, "")
@@ -134,7 +134,18 @@ if [ -s "$WHITELIST" ]; then
         }
         {
             dom = tolower($0)
-            if (!white[dom]) {
+            if (white[dom]) next
+            n = split(dom, parts, ".")
+            cur = parts[n]
+            is_white = 0
+            for (i = n - 1; i >= 1; i--) {
+                cur = parts[i] "." cur
+                if (white[cur]) {
+                    is_white = 1
+                    break
+                }
+            }
+            if (!is_white) {
                 print dom
             }
         }
