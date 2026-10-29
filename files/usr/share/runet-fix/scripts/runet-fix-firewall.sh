@@ -77,12 +77,16 @@ start_nft() {
         # Exclude local private LAN subnets
         nft "add rule inet $TABLE_NAME zapret_mangle ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
 
-        # Intercept HTTP/HTTPS (only first 20 packets of connection for DPI handshake desync)
-        nft "add rule inet $TABLE_NAME zapret_mangle tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass"
+        # Intercept HTTP/HTTPS and Discord Media TCP ports
+        local tcp_ports="80, 443"
+        if [ "$discord_fix" = "1" ]; then
+            tcp_ports="80, 443, 2053, 2083, 2087, 2096, 8443"
+        fi
+        nft "add rule inet $TABLE_NAME zapret_mangle tcp dport { $tcp_ports } ct original packets < 20 counter queue num $QNUM bypass"
         
         # Discord Voice and Media UDP
         if [ "$discord_fix" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle udp dport { 50000-50100, 19294-19344 } ct original packets < 10 counter queue num $QNUM bypass"
+            nft "add rule inet $TABLE_NAME zapret_mangle udp dport { 19294-19344, 50000-50100 } ct original packets < 10 counter queue num $QNUM bypass"
         fi
         
         # QUIC (UDP 443)
@@ -153,11 +157,16 @@ start_ipt() {
             iptables -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
         fi
         iptables -t mangle -A RUNET_ZAPRET -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8 -j RETURN
-        iptables -t mangle -A RUNET_ZAPRET -p tcp -m multiport --dports 80,443 -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+        local tcp_ports="80,443"
+        if [ "$discord_fix" = "1" ]; then
+            tcp_ports="80,443,2053,2083,2087,2096,8443"
+        fi
+        iptables -t mangle -A RUNET_ZAPRET -p tcp -m multiport --dports $tcp_ports -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         if [ "$discord_fix" = "1" ]; then
             iptables -t mangle -A RUNET_ZAPRET -p udp --dport 50000:50100 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
             iptables -t mangle -A RUNET_ZAPRET -p udp --dport 19294:19344 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         fi
+        iptables -t mangle -A RUNET_ZAPRET -p udp --dport 443 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         iptables -t mangle -I FORWARD -j RUNET_ZAPRET
     fi
 

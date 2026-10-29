@@ -23,103 +23,101 @@ find_nfqws() {
 
 get_zapret_args() {
     local preset="$1"
-    local qnum="$2"
-    local custom="$3"
-    local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
+    local custom="$2"
 
     case "$preset" in
         youtube_4k)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
             ;;
         fakedsplit_badseq)
-            echo "--qnum=$qnum --dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+            echo "--dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
             ;;
         multisplit_badsum)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-repeats=4"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-repeats=4"
             ;;
         disorder2_badseq)
-            echo "--qnum=$qnum --dpi-desync=disorder2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq"
+            echo "--dpi-desync=disorder2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq"
             ;;
         split2_pos2)
-            echo "--qnum=$qnum --dpi-desync=fake,split2 --dpi-desync-split-pos=2 --dpi-desync-fooling=badseq --dpi-desync-repeats=4"
+            echo "--dpi-desync=fake,split2 --dpi-desync-split-pos=2 --dpi-desync-fooling=badseq --dpi-desync-repeats=4"
             ;;
         wsize_badsum)
-            echo "--qnum=$qnum --dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-wsize=4"
+            echo "--dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-wsize=4"
             ;;
         tls_cutoff)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq,md5sig --dpi-desync-cutoff=d4"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq,md5sig --dpi-desync-cutoff=d4"
             ;;
         discord_fix)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3"
             ;;
         general_alt)
-            echo "--qnum=$qnum --dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00"
+            echo "--dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00"
             ;;
         general_alt2)
-            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=2"
+            echo "--dpi-desync=multisplit --dpi-desync-split-pos=2"
             ;;
         general_alt3)
-            echo "--qnum=$qnum --dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts"
+            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts"
             ;;
         general_alt4)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
             ;;
         general_alt5)
-            echo "--qnum=$qnum --dpi-desync=syndata,multidisorder"
+            echo "--dpi-desync=syndata,multidisorder"
             ;;
         general_alt6)
-            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=1"
+            echo "--dpi-desync=multisplit --dpi-desync-split-pos=1"
             ;;
         general_alt7)
-            echo "--qnum=$qnum --dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1"
+            echo "--dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1"
             ;;
         general_alt8)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
             ;;
         general_alt9)
-            echo "--qnum=$qnum --dpi-desync=hostfakesplit --dpi-desync-fooling=ts,md5sig --dpi-desync-repeats=4"
+            echo "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts,md5sig --dpi-desync-repeats=4"
             ;;
         general_alt10)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
             ;;
         general_alt11)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
             ;;
         general_alt12)
-            echo "--qnum=$qnum --dpi-desync=hostfakesplit --dpi-desync-fooling=ts"
+            echo "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts"
             ;;
         general_alt13)
-            echo "--qnum=$qnum --dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-repeats=5"
+            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-repeats=5"
             ;;
         general_fake_tls_auto)
-            echo "--qnum=$qnum --dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-fooling=badseq --dpi-desync-repeats=11"
+            echo "--dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-fooling=badseq --dpi-desync-repeats=11"
             ;;
         general_fake_tls_alt)
-            echo "--qnum=$qnum --dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
             ;;
         general_fake_tls_alt2)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
             ;;
         general_fake_tls_alt3)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
             ;;
         general_simple_fake)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
             ;;
         general_simple_fake_alt)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
             ;;
         general_simple_fake_alt2)
-            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-cutoff=n5 --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-cutoff=n5 --dpi-desync-repeats=6"
             ;;
         general_exp)
-            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
             ;;
         custom)
-            echo "--qnum=$qnum $custom"
+            echo "$custom"
             ;;
         flowseal_general|*)
-            echo "--qnum=$qnum --dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
             ;;
     esac
 }
@@ -143,17 +141,31 @@ start_service() {
             local qnum=$(uci -q get runet-fix.zapret.qnum || echo "200")
             local custom_args=$(uci -q get runet-fix.zapret.custom_args || echo "")
             local mode=$(uci -q get runet-fix.zapret.mode || echo "all")
-            local args=$(get_zapret_args "$preset" "$qnum" "$custom_args")
+            local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
+            local desync_opts=$(get_zapret_args "$preset" "$custom_args")
 
             local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
             local excludelist="/usr/share/runet-fix/lists/zapret-exclude.txt"
 
-            if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
-                args="$args --hostlist=$hostlist"
-            fi
-
-            if [ -s "$excludelist" ]; then
-                args="$args --hostlist-exclude=$excludelist"
+            local args=""
+            if [ "$preset" = "custom" ] && echo "$custom_args" | grep -q -- "--qnum"; then
+                args="$custom_args"
+            else
+                local tcp_ports="80,443"
+                if [ "$discord_fix" = "1" ]; then
+                    tcp_ports="80,443,2053,2083,2087,2096,8443"
+                fi
+                args="--qnum=$qnum --filter-tcp=$tcp_ports $desync_opts"
+                if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
+                    args="$args --hostlist=$hostlist"
+                fi
+                if [ -s "$excludelist" ]; then
+                    args="$args --hostlist-exclude=$excludelist"
+                fi
+                args="$args --new --filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11"
+                if [ "$discord_fix" = "1" ]; then
+                    args="$args --new --filter-udp=19294-19344,50000-50100 --filter-l7=discord,stun --dpi-desync=fake --dpi-desync-repeats=6"
+                fi
             fi
 
             echo "[runet-fix] Launching $nfq_bin (preset: $preset)..."
@@ -247,13 +259,17 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    killall nfqws nfqws2 >/dev/null 2>&1 || true
-    killall tg-transproxy >/dev/null 2>&1 || true
+    killall -TERM nfqws nfqws2 tg-transproxy >/dev/null 2>&1 || true
     pkill -f tg_ws_proxy >/dev/null 2>&1 || true
     pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
-    if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
-        rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
-        /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+    local i=0
+    while pidof nfqws >/dev/null 2>&1 && [ $i -lt 10 ]; do
+        usleep 100000
+        i=$((i + 1))
+    done
+    if pidof nfqws >/dev/null 2>&1; then
+        killall -9 nfqws nfqws2 >/dev/null 2>&1 || true
+        usleep 100000
     fi
 }
 
