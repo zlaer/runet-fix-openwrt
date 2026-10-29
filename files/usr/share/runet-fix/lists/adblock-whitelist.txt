@@ -1,0 +1,23 @@
+# Domains that should NEVER be blocked by Adblock
+# One domain per line
+google.com
+youtube.com
+googlevideo.com
+telegram.org
+t.me
+discord.com
+discord.gg
+discordapp.com
+github.com
+githubusercontent.com
+cloudflare.com
+yandex.ru
+ya.ru
+gosuslugi.ru
+sberbank.ru
+tinkoff.ru
+t-bank.ru
+ozon.ru
+wildberries.ru
+vk.com
+vk.me

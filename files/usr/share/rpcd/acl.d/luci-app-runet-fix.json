@@ -1,0 +1,28 @@
+{
+	"luci-app-runet-fix": {
+		"description": "Grant access to runet-fix configuration and management",
+		"read": {
+			"uci": [ "runet-fix" ],
+			"file": {
+				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "read" ],
+				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "read" ],
+				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "read" ],
+				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read" ]
+			},
+			"ubus": {
+				"service": [ "list" ]
+			}
+		},
+		"write": {
+			"uci": [ "runet-fix" ],
+			"file": {
+				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "write" ],
+				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "write" ],
+				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "write" ]
+			},
+			"ubus": {
+				"file": [ "exec" ]
+			}
+		}
+	}
+}

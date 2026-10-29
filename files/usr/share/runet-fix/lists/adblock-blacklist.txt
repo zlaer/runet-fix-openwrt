@@ -1,0 +1,3 @@
+# Custom user domains to block (e.g. tracking, telemetry)
+# One domain per line
+# example-adserver.com

@@ -1,0 +1,172 @@
+#!/bin/sh /etc/rc.common
+# /etc/init.d/runet-fix - Unified procd service for Zapret, Telegram WS, and Adblock
+# Part of the runet-fix all-in-one suite.
+
+USE_PROCD=1
+START=90
+STOP=10
+
+FIREWALL_SCRIPT="/usr/share/runet-fix/scripts/runet-fix-firewall.sh"
+ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
+TG_PY_SCRIPT="/usr/share/runet-fix/scripts/tg_ws_transparent.py"
+TG_C_BIN="/usr/bin/tg-transproxy"
+
+find_nfqws() {
+    for b in /usr/bin/nfqws2 /opt/zapret2/nfq2/nfqws2 /usr/bin/nfqws /opt/zapret/nfq/nfqws; do
+        if [ -x "$b" ]; then
+            echo "$b"
+            return 0
+        fi
+    done
+    return 1
+}
+
+get_zapret_args() {
+    local preset="$1"
+    local qnum="$2"
+    local custom="$3"
+    local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
+
+    case "$preset" in
+        youtube_4k)
+            echo "--qnum=$qnum --dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-repeats=6 --dpi-desync-fooling=badseq,md5sig"
+            ;;
+        discord_fix)
+            echo "--qnum=$qnum --dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3"
+            ;;
+        custom)
+            echo "--qnum=$qnum $custom"
+            ;;
+        flowseal_general|*)
+            # Proven Flowseal preset for combined YouTube + Discord + ISP block bypass
+            echo "--qnum=$qnum --dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+            ;;
+    esac
+}
+
+start_service() {
+    local enabled=$(uci -q get runet-fix.main.enabled || echo "1")
+    [ "$enabled" = "1" ] || {
+        echo "[runet-fix] Service is disabled in /etc/config/runet-fix"
+        return 0
+    }
+
+    echo "[runet-fix] Starting all-in-one runet-fix service..."
+
+    # 1. Start Zapret
+    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
+    if [ "$zapret_enabled" = "1" ]; then
+        local nfq_bin=$(find_nfqws)
+        if [ -n "$nfq_bin" ]; then
+            local preset=$(uci -q get runet-fix.zapret.preset || echo "flowseal_general")
+            local qnum=$(uci -q get runet-fix.zapret.qnum || echo "200")
+            local custom_args=$(uci -q get runet-fix.zapret.custom_args || echo "")
+            local args=$(get_zapret_args "$preset" "$qnum" "$custom_args")
+
+            echo "[runet-fix] Launching $nfq_bin (preset: $preset)..."
+            procd_open_instance "zapret"
+            procd_set_param command $nfq_bin $args
+            procd_set_param respawn 3600 5 0
+            procd_set_param stdout 1
+            procd_set_param stderr 1
+            procd_close_instance
+        else
+            echo "[runet-fix] Warning: nfqws binary not found in standard paths. Zapret daemon skipped."
+        fi
+    fi
+
+    # 2. Start Telegram Transparent Proxy
+    local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
+    if [ "$tg_enabled" = "1" ]; then
+        local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
+        local tg_engine=$(uci -q get runet-fix.telegram.engine || echo "auto")
+        local tg_secret=$(uci -q get runet-fix.telegram.secret || echo "")
+        local custom_domains=$(uci -q get runet-fix.telegram.custom_domains || echo "")
+        local custom_workers=$(uci -q get runet-fix.telegram.custom_workers || echo "")
+
+        # Prefer native C binary for extreme low memory/flash, fallback to Python
+        local use_c_bin=0
+        if [ "$tg_engine" = "c_native" ] && [ -x "$TG_C_BIN" ]; then
+            use_c_bin=1
+        elif [ "$tg_engine" = "auto" ] && [ -x "$TG_C_BIN" ]; then
+            use_c_bin=1
+        fi
+
+        procd_open_instance "telegram"
+        if [ "$use_c_bin" = "1" ]; then
+            echo "[runet-fix] Launching native C Telegram transparent proxy on port $tg_port..."
+            procd_set_param command "$TG_C_BIN" -p "$tg_port"
+        else
+            echo "[runet-fix] Launching Python Telegram transparent proxy on port $tg_port..."
+            local py_cmd="python3 $TG_PY_SCRIPT -p $tg_port"
+            [ -n "$tg_secret" ] && py_cmd="$py_cmd -s $tg_secret"
+            [ -n "$custom_domains" ] && py_cmd="$py_cmd -d $custom_domains"
+            [ -n "$custom_workers" ] && py_cmd="$py_cmd -w $custom_workers"
+            procd_set_param command python3 "$TG_PY_SCRIPT" -p "$tg_port"
+        fi
+        procd_set_param respawn 3600 5 0
+        procd_set_param stdout 1
+        procd_set_param stderr 1
+        procd_close_instance
+    fi
+
+    # 3. Apply Unified Firewall Rules
+    if [ -x "$FIREWALL_SCRIPT" ]; then
+        "$FIREWALL_SCRIPT" start
+    fi
+
+    # 4. Check Adblock
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
+    if [ "$adb_enabled" = "1" ]; then
+        if [ ! -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
+            echo "[runet-fix] Initializing adblock in background..."
+            "$ADBLOCK_SCRIPT" >/dev/null 2>&1 &
+        else
+            /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
+stop_service() {
+    echo "[runet-fix] Stopping runet-fix service..."
+    if [ -x "$FIREWALL_SCRIPT" ]; then
+        "$FIREWALL_SCRIPT" stop
+    fi
+}
+
+reload_service() {
+    stop
+    start
+}
+
+service_triggers() {
+    procd_add_reload_trigger "runet-fix"
+}
+
+extra_command "update_adblock" "Fetch and generate latest adblock rules"
+update_adblock() {
+    "$ADBLOCK_SCRIPT"
+}
+
+extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
+status_all() {
+    echo "=== [runet-fix] All-in-One Status ==="
+    local nfq_pid=$(pidof nfqws nfqws2 2>/dev/null)
+    if [ -n "$nfq_pid" ]; then
+        echo "Zapret (nfqws): RUNNING (PID $nfq_pid)"
+    else
+        echo "Zapret (nfqws): STOPPED"
+    fi
+
+    local tg_pid=$(pidof tg-transproxy 2>/dev/null)
+    [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_transparent.py" 2>/dev/null)
+    if [ -n "$tg_pid" ]; then
+        echo "Telegram Transparent Proxy: RUNNING (PID $tg_pid)"
+    else
+        echo "Telegram Transparent Proxy: STOPPED"
+    fi
+
+    local adb_rules=$(wc -l < /tmp/dnsmasq.d/runet-fix-adblock.conf 2>/dev/null || echo "0")
+    echo "Adblock Rules in dnsmasq: $adb_rules domains blocked"
+    echo "======================================"
+}

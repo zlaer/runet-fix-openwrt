@@ -1,0 +1,51 @@
+{
+	"admin/services/runet-fix": {
+		"title": "Runet Fix",
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-runet-fix" ]
+		}
+	},
+	"admin/services/runet-fix/overview": {
+		"title": "Overview",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "runet-fix/overview"
+		}
+	},
+	"admin/services/runet-fix/zapret": {
+		"title": "Zapret (DPI)",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "runet-fix/zapret"
+		}
+	},
+	"admin/services/runet-fix/telegram": {
+		"title": "Telegram Bypass",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "runet-fix/telegram"
+		}
+	},
+	"admin/services/runet-fix/adblock": {
+		"title": "Adblock",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "runet-fix/adblock"
+		}
+	},
+	"admin/services/runet-fix/diagnostics": {
+		"title": "Diagnostics & Logs",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "runet-fix/diagnostics"
+		}
+	}
+}

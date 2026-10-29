@@ -1,0 +1,18 @@
+# Build artifacts
+*.o
+*.so
+*.ipk
+*.apk
+*.tar.gz
+*.tmp
+bin/
+build_dir/
+staging_dir/
+
+# Editor & OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/

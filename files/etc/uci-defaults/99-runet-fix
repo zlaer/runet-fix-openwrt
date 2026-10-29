@@ -1,0 +1,21 @@
+#!/bin/sh
+# 99-runet-fix - First-boot / post-install configuration for OpenWrt
+
+# Enable runet-fix service
+/etc/init.d/runet-fix enable
+
+# Reload LuCI menu and ACLs
+rm -f /tmp/luci-indexcache
+killall -HUP rpcd 2>/dev/null || true
+
+# Initialize adblock configuration directory
+mkdir -p /tmp/dnsmasq.d
+mkdir -p /usr/share/runet-fix/lists
+
+# Make scripts executable
+chmod +x /usr/bin/runet-fix
+chmod +x /usr/share/runet-fix/scripts/*.sh
+chmod +x /usr/share/runet-fix/scripts/*.py
+chmod +x /etc/init.d/runet-fix
+
+exit 0

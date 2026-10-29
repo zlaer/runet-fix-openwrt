@@ -1,0 +1,32 @@
+# Default hostlist for Zapret selective DPI desync
+# Domains match any subdomain (e.g. youtube.com matches r1---sn-xxx.googlevideo.com)
+youtube.com
+googlevideo.com
+ytimg.com
+ggpht.com
+googleapis.com
+googleusercontent.com
+discord.com
+discord.gg
+discordapp.com
+discordapp.net
+discord.media
+discord-attachments-uploads-prd.storage.googleapis.com
+twitter.com
+x.com
+t.co
+twimg.com
+instagram.com
+cdninstagram.com
+facebook.com
+fbcdn.net
+notion.so
+medium.com
+rutracker.org
+flibusta.is
+nnmclub.to
+kinozal.tv
+lostfilm.tv
+hdrezka.ag
+torproject.org
+cloudflare-ech.com
