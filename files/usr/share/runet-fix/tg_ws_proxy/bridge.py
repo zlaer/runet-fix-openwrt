@@ -258,8 +258,8 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
             chosen_domain = base_domain
             break
         except Exception as exc:
-            log.warning("[%s] DC%d%s CF proxy failed: %s",
-                        label, dc, media_tag, repr(exc))
+            log.warning("[%s] DC%d%s CF proxy failed (%s): %s",
+                        label, dc, media_tag, domain, repr(exc))
 
     if ws is None:
         return False
@@ -267,7 +267,7 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
     log.debug('[%s] WS CONNECT DC%d%s route=cf setup_ms=%.0f',
               label, dc, media_tag, (time.monotonic() - connect_started) * 1000)
     if chosen_domain and balancer.update_domain_for_dc(dc, chosen_domain):
-        log.info("[%s] Switched active CF domain", label)
+        log.info("[%s] Switched active CF domain to %s", label, chosen_domain)
 
     stats.connections_cfproxy += 1
     await ws.send(relay_init)
@@ -389,6 +389,9 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                         body = bytes(client_buf[hdr_len:total_len])
                         del client_buf[:total_len]
 
+                        ctor_hex = body[20:24].hex() if len(body) >= 24 else body[:4].hex()
+                        log.debug("[%s] %s -> WS: %d bytes (ctor=0x%s)", label, dc_tag, len(body), ctor_hex)
+
                         inter_pkt = struct.pack('<I', len(body) | (0x80000000 if qa else 0)) + body
                         enc_frame = ctx.tg_enc.update(inter_pkt)
                         frames.append(enc_frame)
@@ -463,6 +466,8 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                     if client_proto == PROTO_TAG_ABRIDGED:
                         body = bytes(ws_buf[4:total_len])
                         del ws_buf[:total_len]
+                        ctor_hex = body[20:24].hex() if len(body) >= 24 else body[:4].hex()
+                        log.debug("[%s] %s WS -> CLT: %d bytes (ctor=0x%s)", label, dc_tag, len(body), ctor_hex)
                         if len(body) % 4 != 0:
                             body += b'\x00' * (4 - (len(body) % 4))
                         words = len(body) // 4

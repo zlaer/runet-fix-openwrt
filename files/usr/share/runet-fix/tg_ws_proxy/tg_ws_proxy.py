@@ -25,7 +25,7 @@ from .utils import *
 from .stats import stats
 from .config import proxy_config, parse_dc_ip_list, start_cfproxy_domain_refresh, coerce_domain_list
 from .bridge import MsgSplitter, CryptoCtx, do_fallback, bridge_ws_reencrypt, reset_tcp_backoff
-from .raw_websocket import set_sock_opts
+from .raw_websocket import RawWebSocket, set_sock_opts
 from .fake_tls import proxy_to_masking_domain, verify_client_hello, build_server_hello, FakeTlsStream, TLS_RECORD_HANDSHAKE
 from .balancer import balancer
 from .pool import ws_pool, cf_worker_pool
@@ -114,7 +114,7 @@ def _get_dc_from_ip(ip_str: Optional[str]) -> int:
 
 async def _handle_http_api(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                            handshake: bytes, orig_dest_ip: Optional[str], orig_dest_port: Optional[int], label: str):
-    """Proxies Telegram HTTP transport requests (POST /api) via Cloudflare HTTPS relays."""
+    """Proxies Telegram HTTP transport requests (POST /api) via Cloudflare WebSocket relays."""
     try:
         dc_id = _get_dc_from_ip(orig_dest_ip)
         candidate_domains = balancer.get_domains_for_dc(dc_id)
@@ -133,6 +133,26 @@ async def _handle_http_api(reader: asyncio.StreamReader, writer: asyncio.StreamW
 
         headers_raw = buf[:sep_idx].decode('iso-8859-1', errors='replace')
         body_start = buf[sep_idx + 4:]
+
+        import email.utils
+        date_str = email.utils.formatdate(usegmt=True)
+
+        if headers_raw.startswith('OPTIONS '):
+            resp_http = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Server: nginx\r\n"
+                f"Date: {date_str}\r\n"
+                f"Content-Length: 0\r\n"
+                f"Connection: close\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+                f"Access-Control-Allow-Headers: Keep-Alive,X-CustomHeader,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n"
+                f"Access-Control-Max-Age: 1728000\r\n"
+                f"\r\n"
+            ).encode('ascii')
+            writer.write(resp_http)
+            await writer.drain()
+            return
 
         content_len = 0
         for line in headers_raw.split('\r\n'):
@@ -153,40 +173,63 @@ async def _handle_http_api(reader: asyncio.StreamReader, writer: asyncio.StreamW
 
         log.info("[%s] HTTP POST /api for DC%d (%d bytes body)", label, dc_id, len(body))
 
-        import ssl
-        ssl_ctx = ssl.create_default_context()
-        ssl_ctx.check_hostname = False
-        ssl_ctx.verify_mode = ssl.CERT_NONE
-
-        for base_dom in candidate_domains[:3]:
+        resp_body = None
+        for base_dom in candidate_domains:
             host = f"kws{dc_id}.{base_dom}"
             try:
-                r, w = await asyncio.wait_for(
-                    asyncio.open_connection(host, 443, ssl=ssl_ctx), timeout=5.0
-                )
-                req = (
-                    f"POST /api HTTP/1.1\r\n"
-                    f"Host: {host}\r\n"
-                    f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"
-                    f"Content-Type: application/octet-stream\r\n"
-                    f"Content-Length: {len(body)}\r\n"
-                    f"Connection: close\r\n\r\n"
-                ).encode('ascii') + body
+                ws = await RawWebSocket.connect(host, host, path='/apiws', secure=True, timeout=4.0)
+                init = _generate_relay_init(PROTO_TAG_INTERMEDIATE, dc_id)
+                enc_k = init[SKIP_LEN:SKIP_LEN + PREKEY_LEN]
+                enc_iv = init[SKIP_LEN + PREKEY_LEN:SKIP_LEN + PREKEY_LEN + IV_LEN]
+                dec_prekey_iv = init[SKIP_LEN:SKIP_LEN + PREKEY_LEN + IV_LEN][::-1]
 
-                w.write(req)
-                await w.drain()
+                tg_enc = Cipher(algorithms.AES(enc_k), modes.CTR(enc_iv)).encryptor()
+                tg_dec = Cipher(algorithms.AES(dec_prekey_iv[:32]), modes.CTR(dec_prekey_iv[32:])).encryptor()
+                tg_enc.update(ZERO_64)
+                await ws.send(init)
 
+                inter_frame = struct.pack('<I', len(body)) + body
+                await ws.send(tg_enc.update(inter_frame))
+
+                decrypted_buf = bytearray()
+                resp_len = None
                 while True:
-                    resp_chunk = await asyncio.wait_for(r.read(65536), timeout=5.0)
-                    if not resp_chunk:
+                    raw_chunk = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                    if not raw_chunk:
                         break
-                    writer.write(resp_chunk)
-                    await writer.drain()
+                    decrypted_buf.extend(tg_dec.update(raw_chunk))
+                    if resp_len is None and len(decrypted_buf) >= 4:
+                        resp_len = struct.unpack('<I', decrypted_buf[:4])[0] & 0x7FFFFFFF
+                    if resp_len is not None and len(decrypted_buf) >= 4 + resp_len:
+                        break
 
-                w.close()
+                await ws.close()
+                if resp_len is None or len(decrypted_buf) < 4 + resp_len:
+                    continue
+
+                resp_body = bytes(decrypted_buf[4:4 + resp_len])
                 break
             except Exception as ex:
                 log.debug("[%s] HTTP /api relay via %s failed: %s", label, host, ex)
+
+        if resp_body is not None:
+            log.info("[%s] HTTP POST /api for DC%d: SUCCESS (%d bytes resp)", label, dc_id, len(resp_body))
+            resp_http = (
+                f"HTTP/1.1 200 OK\r\n"
+                f"Server: nginx\r\n"
+                f"Date: {date_str}\r\n"
+                f"Content-Type: application/octet-stream\r\n"
+                f"Content-Length: {len(resp_body)}\r\n"
+                f"Connection: close\r\n"
+                f"Access-Control-Allow-Origin: *\r\n"
+                f"Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+                f"Access-Control-Allow-Headers: Keep-Alive,X-CustomHeader,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n"
+                f"\r\n"
+            ).encode('ascii') + resp_body
+            writer.write(resp_http)
+            await writer.drain()
+        else:
+            log.warning("[%s] HTTP POST /api for DC%d: all relays failed", label, dc_id)
 
     except Exception as e:
         log.debug("[%s] _handle_http_api error: %s", label, e)
@@ -409,8 +452,8 @@ async def _handle_client(reader, writer, secret: bytes):
 
         handshake, clt_reader, clt_writer, label = init
 
-        # Check if client sent HTTP POST /api (Telegram HTTP fallback on port 80/443)
-        if orig_dest_ip and handshake.startswith(b'POST /api'):
+        # Check if client sent HTTP (POST /api, OPTIONS, etc.) on port 80/443
+        if orig_dest_ip and (handshake.startswith(b'POST ') or handshake.startswith(b'OPTIONS ')):
             await _handle_http_api(clt_reader, clt_writer, handshake, orig_dest_ip, orig_dest_port or 80, label)
             return
 

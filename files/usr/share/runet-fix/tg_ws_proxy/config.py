@@ -56,11 +56,18 @@ def _dd(s: str) -> str:
 
 
 _CFPROXY_PREPEND: List[str] = [
+    'notelega.co.uk',
+    'pclead.co.uk',
+    'offshor.co.uk',
+    'pomogite.co.uk',
+    'sadnews.co.uk',
+    'pyatdesyatodin.co.uk',
+    'ebally.co.uk',
+    'nebally.co.uk',
+    'stopblocking.co.uk',
+    'pyatdesyatdva.co.uk',
     'cakeisalie.co.uk',
     'noskomnadzor.co.uk',
-    'pyatdesyatdva.co.uk',
-    'notelega.co.uk',
-    'offshor.co.uk',
 ]
 
 CFPROXY_DEFAULT_DOMAINS: List[str] = _CFPROXY_PREPEND + [d for d in [_dd(d) for d in _CFPROXY_ENC] if d not in _CFPROXY_PREPEND]
@@ -158,7 +165,7 @@ def _is_valid_domain(domain: str) -> bool:
 def _normalize_domain_pool(domains: List[str]) -> List[str]:
     seen = set()
     normalized: List[str] = []
-    for domain in domains:
+    for domain in _CFPROXY_PREPEND + domains:
         item = domain.strip().lower()
         if not _is_valid_domain(item):
             continue

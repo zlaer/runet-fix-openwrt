@@ -15,8 +15,9 @@ class _Balancer:
         
         self.domains = domains_list[:]
 
+        primary = self.domains[:min(6, len(self.domains))] if self.domains else []
         self._dc_to_domain = {
-            dc_id: random.choice(self.domains)
+            dc_id: random.choice(primary) if primary else ""
             for dc_id in (1, 2, 3, 4, 5, 203)
         }
 
@@ -29,15 +30,20 @@ class _Balancer:
 
     def get_domains_for_dc(self, dc_id: int) -> Iterator[str]:
         current_domain = self._dc_to_domain.get(dc_id)
-        if current_domain is not None:
+        if current_domain:
             yield current_domain
 
-        shuffled_domains = self.domains[:]
-        random.shuffle(shuffled_domains)
+        # Yield from high-priority verified pool first (first 10 domains)
+        high_pri = [d for d in self.domains[:10] if d != current_domain]
+        random.shuffle(high_pri)
+        for domain in high_pri:
+            yield domain
 
-        for domain in shuffled_domains:
-            if domain != current_domain:
-                yield domain
+        # Yield any remaining fallback domains
+        fallbacks = [d for d in self.domains[10:] if d != current_domain]
+        random.shuffle(fallbacks)
+        for domain in fallbacks:
+            yield domain
 
 
 balancer = _Balancer()
