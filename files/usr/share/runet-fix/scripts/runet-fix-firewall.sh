@@ -30,11 +30,22 @@ start_nft() {
     stop_nft >/dev/null 2>&1
 
     # Load configuration values from UCI
+    local main_enabled=$(uci -q get runet-fix.main.enabled || echo "1")
+    if [ "$main_enabled" != "1" ]; then
+        echo "[runet-fix] Master switch disabled. Firewall rules cleaned."
+        return 0
+    fi
+
     local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
     local zapret_mode=$(uci -q get runet-fix.zapret.mode || echo "all")
     local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
     local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
+
+    if [ "$zapret_enabled" != "1" ] && [ "$tg_enabled" != "1" ]; then
+        echo "[runet-fix] Both Zapret and Telegram disabled. Firewall rules cleaned."
+        return 0
+    fi
 
     echo "[runet-fix] Applying nftables rules (fw4)..."
 
@@ -97,10 +108,21 @@ stop_nft() {
 start_ipt() {
     stop_ipt >/dev/null 2>&1
 
+    local main_enabled=$(uci -q get runet-fix.main.enabled || echo "1")
+    if [ "$main_enabled" != "1" ]; then
+        echo "[runet-fix] Master switch disabled. Firewall rules cleaned."
+        return 0
+    fi
+
     local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
     local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
     local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
+
+    if [ "$zapret_enabled" != "1" ] && [ "$tg_enabled" != "1" ]; then
+        echo "[runet-fix] Both Zapret and Telegram disabled. Firewall rules cleaned."
+        return 0
+    fi
 
     echo "[runet-fix] Applying iptables rules (fw3)..."
 

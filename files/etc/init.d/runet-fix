@@ -127,7 +127,8 @@ get_zapret_args() {
 start_service() {
     local enabled=$(uci -q get runet-fix.main.enabled || echo "1")
     [ "$enabled" = "1" ] || {
-        echo "[runet-fix] Service is disabled in /etc/config/runet-fix"
+        echo "[runet-fix] Master switch is disabled in /etc/config/runet-fix"
+        stop_service
         return 0
     }
 
@@ -165,6 +166,9 @@ start_service() {
         else
             echo "[runet-fix] Warning: nfqws binary not found in standard paths. Zapret daemon skipped."
         fi
+    else
+        echo "[runet-fix] Zapret DPI engine is disabled in config."
+        killall nfqws nfqws2 >/dev/null 2>&1 || true
     fi
 
     # 2. Start Telegram Transparent Proxy
@@ -200,6 +204,10 @@ start_service() {
         procd_set_param stdout 1
         procd_set_param stderr 1
         procd_close_instance
+    else
+        echo "[runet-fix] Telegram proxy is disabled in config."
+        killall tg-transproxy >/dev/null 2>&1 || true
+        pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     fi
 
     # 3. Apply Unified Firewall Rules
@@ -223,6 +231,12 @@ start_service() {
             [ -f "/tmp/runet-fix-adblock.count" ] || wc -l < /tmp/dnsmasq.d/runet-fix-adblock.conf > /tmp/runet-fix-adblock.count
             /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
         fi
+    else
+        echo "[runet-fix] Adblock is disabled in config, removing adblock rules..."
+        if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
+            rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+            /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+        fi
     fi
 }
 
@@ -230,6 +244,13 @@ stop_service() {
     echo "[runet-fix] Stopping runet-fix service..."
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
+    fi
+    killall nfqws nfqws2 >/dev/null 2>&1 || true
+    killall tg-transproxy >/dev/null 2>&1 || true
+    pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
+    if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
+        rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+        /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
     fi
 }
 

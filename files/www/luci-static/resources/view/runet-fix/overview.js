@@ -137,6 +137,13 @@ return view.extend({
 		]);
 	},
 
+	handleSaveApply: function(ev, mode) {
+		return this.handleSave(ev).then(function() {
+			ui.changes.apply(mode == '0');
+			return fs.exec('/usr/bin/runet-fix', ['restart']);
+		});
+	},
+
 	render: function(data) {
 		var curLang = localStorage.getItem('runet_fix_lang') || 'ru';
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
