@@ -92,6 +92,9 @@ start_nft() {
         nft "add chain inet $TABLE_NAME zapret_mangle_out { type filter hook output priority mangle; policy accept; }"
         nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
         nft "add rule inet $TABLE_NAME zapret_mangle_out meta mark 0x40000000 return"
+        if [ "$tg_enabled" = "1" ]; then
+            nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr @telegram_v4 return"
+        fi
         nft "add rule inet $TABLE_NAME zapret_mangle_out tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass"
         nft "add rule inet $TABLE_NAME zapret_mangle_out udp dport 443 ct original packets < 10 counter queue num $QNUM bypass"
         echo "[runet-fix] Zapret NFQUEUE ($QNUM) active (Forward + Output)"
