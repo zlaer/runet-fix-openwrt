@@ -253,7 +253,7 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
     for base_domain in balancer.get_domains_for_dc(dc):
         domain = f'kws{dc}.{base_domain}'
         try:
-            ws = await RawWebSocket.connect(domain, domain, timeout=10.0, 
+            ws = await RawWebSocket.connect(domain, domain, timeout=4.0, 
                                             secure=not proxy_config.disable_secure)
             chosen_domain = base_domain
             break
@@ -460,10 +460,9 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                     if len(ws_buf) < total_len:
                         break
 
-                    body = bytes(ws_buf[4:total_len])
-                    del ws_buf[:total_len]
-
                     if client_proto == PROTO_TAG_ABRIDGED:
+                        body = bytes(ws_buf[4:total_len])
+                        del ws_buf[:total_len]
                         if len(body) % 4 != 0:
                             body += b'\x00' * (4 - (len(body) % 4))
                         words = len(body) // 4
@@ -473,7 +472,8 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                             hdr = bytes([0xFF if qa else 0x7F]) + words.to_bytes(3, 'little')
                         client_pkt = hdr + body
                     else:
-                        client_pkt = struct.pack('<I', len(body) | (0x80000000 if qa else 0)) + body
+                        client_pkt = bytes(ws_buf[:total_len])
+                        del ws_buf[:total_len]
 
                     enc_data = ctx.clt_enc.update(client_pkt)
                     out_chunks.append(enc_data)

@@ -457,8 +457,14 @@ async def _handle_client(reader, writer, secret: bytes):
         log.info("[%s] Telegram DC%d%s session (transparent=%s, proto=0x%08X)",
                  label, dc, ' media' if is_media else '', is_transparent, proto_int)
 
-        # Telegram Cloudflare WebSocket relays (kws{dc}) require PROTO_TAG_INTERMEDIATE
-        relay_init = _generate_relay_init(PROTO_TAG_INTERMEDIATE, dc_idx)
+        # Cloudflare WebSocket relay supports PROTO_TAG_INTERMEDIATE and PROTO_TAG_SECURE.
+        # If client uses PROTO_TAG_ABRIDGED, Cloudflare WS does not support it, so translate to INTERMEDIATE.
+        if proto_tag == PROTO_TAG_ABRIDGED:
+            upstream_proto_tag = PROTO_TAG_INTERMEDIATE
+        else:
+            upstream_proto_tag = proto_tag
+
+        relay_init = _generate_relay_init(upstream_proto_tag, dc_idx)
         ctx = _build_crypto_ctx(client_dec_prekey_iv, secret_used, relay_init)
 
         media_tag = " media" if is_media else ""
