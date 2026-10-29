@@ -79,20 +79,17 @@ DC_DEFAULT_IPS: Dict[int, str] = {
 
 # Default community relay domains pool
 DEFAULT_CF_DOMAINS: List[str] = [
-    'offshor.co.uk',
     'cakeisalie.co.uk',
     'noskomnadzor.co.uk',
-    'lovetrue.co.uk',
-    'sorokdva.co.uk',
     'pyatdesyatdva.co.uk',
-    'kartoshka.co.uk',
-    'pyatdesyatodin.co.uk',
     'notelega.co.uk',
+    'offshor.co.uk',
+    'kartoshka.co.uk',
     'ebally.co.uk',
     'nebally.co.uk',
+    'sorokdva.co.uk',
     'havegreatday.co.uk',
     'pomogite.co.uk',
-    'onedaychamp.co.uk',
     'stopblocking.co.uk',
     'nothingthere.co.uk'
 ]
@@ -433,7 +430,8 @@ class RawWebSocket:
         while not self.closed:
             try:
                 head = await self.reader.readexactly(2)
-            except (asyncio.IncompleteReadError, ConnectionError, OSError):
+            except Exception as ex:
+                log.info("WS readexception: %s", repr(ex))
                 return None
 
             b1, b2 = head[0], head[1]
@@ -460,6 +458,8 @@ class RawWebSocket:
 
             if opcode == 0x08:  # Close frame
                 self.closed = True
+                close_code = struct.unpack('!H', payload[:2])[0] if len(payload) >= 2 else 0
+                log.info("WS server sent Close frame code=%d reason=%r", close_code, payload[2:])
                 try:
                     self.writer.write(self._build_frame(0x08, payload[:2] if payload else b''))
                     await self.writer.drain()
@@ -774,6 +774,90 @@ class TelegramTransparentProxy:
             except Exception:
                 pass
 
+    async def _handle_http_api(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                               handshake: bytes, orig_dest_ip: str, orig_dest_port: int, label: str):
+        """Proxies Telegram HTTP transport requests (POST /api) via Cloudflare HTTPS relays."""
+        try:
+            dc_id = self._get_dc_from_ip(orig_dest_ip)
+            candidate_domains = self._get_candidate_domains(dc_id)
+
+            buf = bytearray(handshake)
+            while b'\r\n\r\n' not in buf and len(buf) < 8192:
+                chunk = await asyncio.wait_for(reader.read(4096), timeout=3.0)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+
+            sep_idx = buf.find(b'\r\n\r\n')
+            if sep_idx == -1:
+                writer.close()
+                return
+
+            headers_raw = buf[:sep_idx].decode('iso-8859-1', errors='replace')
+            body_start = buf[sep_idx + 4:]
+
+            content_len = 0
+            for line in headers_raw.split('\r\n'):
+                if line.lower().startswith('content-length:'):
+                    try:
+                        content_len = int(line.split(':', 1)[1].strip())
+                    except ValueError:
+                        pass
+                    break
+
+            body = bytearray(body_start)
+            while len(body) < content_len:
+                remaining = content_len - len(body)
+                chunk = await asyncio.wait_for(reader.read(min(remaining, 65536)), timeout=5.0)
+                if not chunk:
+                    break
+                body.extend(chunk)
+
+            log.info("[%s] HTTP POST /api for DC%d (%d bytes body)", label, dc_id, len(body))
+
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
+            for base_dom in candidate_domains[:3]:
+                host = f"kws{dc_id}.{base_dom}"
+                try:
+                    r, w = await asyncio.wait_for(
+                        asyncio.open_connection(host, 443, ssl=ssl_ctx), timeout=5.0
+                    )
+                    req = (
+                        f"POST /api HTTP/1.1\r\n"
+                        f"Host: {host}\r\n"
+                        f"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"
+                        f"Content-Type: application/octet-stream\r\n"
+                        f"Content-Length: {len(body)}\r\n"
+                        f"Connection: close\r\n\r\n"
+                    ).encode('ascii') + body
+
+                    w.write(req)
+                    await w.drain()
+
+                    while True:
+                        resp_chunk = await asyncio.wait_for(r.read(65536), timeout=5.0)
+                        if not resp_chunk:
+                            break
+                        writer.write(resp_chunk)
+                        await writer.drain()
+
+                    w.close()
+                    break
+                except Exception as ex:
+                    log.debug("[%s] HTTP /api relay via %s failed: %s", label, host, ex)
+
+        except Exception as e:
+            log.debug("[%s] _handle_http_api error: %s", label, e)
+        finally:
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
+
     async def _raw_pipe(self, r1: asyncio.StreamReader, w1: asyncio.StreamWriter,
                         r2: asyncio.StreamReader, w2: asyncio.StreamWriter):
         """Raw bidirectional byte pipe for non-MTProto pass-through (e.g. web.telegram.org)."""
@@ -835,13 +919,20 @@ class TelegramTransparentProxy:
                 is_transparent = False
                 secret_used = self.secret
 
-            # If not MTProto, check if it's plain HTTP or TLS to Telegram IP (e.g. web.telegram.org)
+            # If not MTProto, check if it's plain HTTP POST /api or TLS to Telegram IP
             if res is None:
-                if orig_dest_ip and orig_dest_port and (handshake[:4] in (b'POST', b'GET ', b'HEAD') or handshake[0] == 0x16):
-                    log.info("[%s] Forwarding non-MTProto HTTP/TLS to %s:%d", label, orig_dest_ip, orig_dest_port)
+                if orig_dest_ip and handshake.startswith(b'POST /api'):
+                    await self._handle_http_api(reader, writer, handshake, orig_dest_ip, orig_dest_port or 80, label)
+                    return
+
+                if orig_dest_ip and orig_dest_port and (handshake[:4] in (b'GET ', b'HEAD') or handshake[0] == 0x16):
+                    # Direct TLS or GET (e.g. web.telegram.org)
+                    if orig_dest_port == 80:
+                        writer.close()
+                        return
                     try:
                         remote_reader, remote_writer = await asyncio.wait_for(
-                            asyncio.open_connection(orig_dest_ip, orig_dest_port), timeout=6.0
+                            asyncio.open_connection(orig_dest_ip, orig_dest_port), timeout=3.0
                         )
                         set_sock_opts(remote_writer.transport)
                         remote_writer.write(handshake)
