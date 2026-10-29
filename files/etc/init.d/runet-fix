@@ -8,7 +8,8 @@ STOP=10
 
 FIREWALL_SCRIPT="/usr/share/runet-fix/scripts/runet-fix-firewall.sh"
 ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
-TG_PY_SCRIPT="/usr/share/runet-fix/scripts/tg_ws_transparent.py"
+TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
+[ ! -f "$TG_PY_SCRIPT" ] && TG_PY_SCRIPT="/usr/share/runet-fix/scripts/tg_ws_transparent.py"
 TG_C_BIN="/usr/bin/tg-transproxy"
 
 find_nfqws() {
@@ -193,11 +194,21 @@ start_service() {
             echo "[runet-fix] Launching native C Telegram transparent proxy on port $tg_port..."
             procd_set_param command "$TG_C_BIN" -p "$tg_port"
         else
-            echo "[runet-fix] Launching Python Telegram transparent proxy on port $tg_port..."
-            procd_set_param command python3 "$TG_PY_SCRIPT" -p "$tg_port"
+            echo "[runet-fix] Launching Python Telegram WebSocket proxy on port $tg_port..."
+            procd_set_param command python3 "$TG_PY_SCRIPT" -p "$tg_port" --no-h2
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
-            [ -n "$custom_domains" ] && procd_append_param command -d "$custom_domains"
-            [ -n "$custom_workers" ] && procd_append_param command -w "$custom_workers"
+            local fake_tls=$(uci -q get runet-fix.telegram.fake_tls_domain || echo "")
+            [ -n "$fake_tls" ] && procd_append_param command --fake-tls-domain "$fake_tls"
+            if [ -n "$custom_domains" ]; then
+                for d in $(echo "$custom_domains" | tr ',' ' '); do
+                    procd_append_param command -d "$d"
+                done
+            fi
+            if [ -n "$custom_workers" ]; then
+                for w in $(echo "$custom_workers" | tr ',' ' '); do
+                    procd_append_param command -w "$w"
+                done
+            fi
         fi
         procd_set_param respawn 3600 5 0
         procd_set_param stdout 1
@@ -206,6 +217,7 @@ start_service() {
     else
         echo "[runet-fix] Telegram proxy is disabled in config."
         killall tg-transproxy >/dev/null 2>&1 || true
+        pkill -f tg_ws_proxy >/dev/null 2>&1 || true
         pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     fi
 
@@ -246,6 +258,7 @@ stop_service() {
     fi
     killall nfqws nfqws2 >/dev/null 2>&1 || true
     killall tg-transproxy >/dev/null 2>&1 || true
+    pkill -f tg_ws_proxy >/dev/null 2>&1 || true
     pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
         rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
