@@ -12,28 +12,36 @@ var callServiceList = rpc.declare({
 	expect: { '': {} }
 });
 
-var callExec = rpc.declare({
-	object: 'file',
-	method: 'exec',
-	params: [ 'command', 'params' ],
-	expect: { '': {} }
+var callInitAction = rpc.declare({
+	object: 'luci',
+	method: 'setInitAction',
+	params: [ 'name', 'action' ],
+	expect: { result: false }
 });
 
 return view.extend({
 	load: function() {
 		return Promise.all([
 			callServiceList('runet-fix'),
-			fs.read('/tmp/dnsmasq.d/runet-fix-adblock.conf').catch(function() { return ''; }),
-			fs.exec_direct('/usr/bin/pgrep', ['-f', 'nfqws']).catch(function() { return ''; }),
-			fs.exec_direct('/usr/bin/pgrep', ['-f', 'tg-transproxy|tg_ws_transparent']).catch(function() { return ''; })
+			fs.lines('/tmp/dnsmasq.d/runet-fix-adblock.conf').catch(function() { return []; })
 		]);
 	},
 
 	render: function(data) {
 		var serviceData = data[0] || {};
-		var adblockRules = data[1] ? data[1].trim().split('\n').length : 0;
-		var nfqwsPid = data[2] ? data[2].trim() : '';
-		var tgPid = data[3] ? data[3].trim() : '';
+		var adblockLines = data[1] || [];
+		var adblockRules = adblockLines.length;
+
+		// Extract instances from procd
+		var instances = (serviceData['runet-fix'] && serviceData['runet-fix'].instances) ? serviceData['runet-fix'].instances : {};
+		var zapret = instances['zapret'] || null;
+		var telegram = instances['telegram'] || null;
+
+		var zapretRunning = zapret && zapret.running;
+		var zapretPid = zapret ? zapret.pid : null;
+
+		var telegramRunning = telegram && telegram.running;
+		var telegramPid = telegram ? telegram.pid : null;
 
 		var m = new form.Map('runet-fix', _('Runet Fix - All-in-One Dashboard'),
 			_('Unified high-performance suite for OpenWrt: Zapret DPI bypass, Transparent Telegram WebSocket tunnel, and Smart Adblock.'));
@@ -47,20 +55,20 @@ return view.extend({
 		var o = s.option(form.DummyValue, '_status_table', _('Subsystem Status'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
-			var zapretBadge = nfqwsPid ? 
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;">RUNNING (PID ' + nfqwsPid + ')</span>' :
-				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;">STOPPED</span>';
+			var zapretBadge = zapretRunning ? 
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">RUNNING (PID ' + zapretPid + ')</span>' :
+				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">STOPPED</span>';
 
-			var tgBadge = tgPid ?
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;">ACTIVE (PID ' + tgPid + ')</span>' :
-				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;">STOPPED</span>';
+			var tgBadge = telegramRunning ?
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">ACTIVE (PID ' + telegramPid + ')</span>' :
+				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">STOPPED</span>';
 
 			var adblockBadge = adblockRules > 0 ?
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;">ACTIVE (' + adblockRules + ' domains)</span>' :
-				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;">INACTIVE</span>';
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">ACTIVE (' + adblockRules.toLocaleString() + ' domains)</span>' :
+				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">INACTIVE</span>';
 
 			return '<div class="table" style="margin-top:10px;">' +
-				'<div class="tr"><div class="td" style="font-weight:bold;width:30%;">Zapret (YouTube & Discord DPI)</div><div class="td">' + zapretBadge + '</div></div>' +
+				'<div class="tr"><div class="td" style="font-weight:bold;width:35%;">Zapret (YouTube 4K & Discord DPI)</div><div class="td">' + zapretBadge + '</div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">Telegram Transparent Proxy</div><div class="td">' + tgBadge + ' <small style="margin-left:10px;color:#888;">(Zero-config for whole LAN)</small></div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">dnsmasq Smart Adblock</div><div class="td">' + adblockBadge + ' <small style="margin-left:10px;color:#888;">(0 extra daemons, RAM optimized)</small></div></div>' +
 				'</div>';
@@ -70,27 +78,23 @@ return view.extend({
 		var actions = s.option(form.DummyValue, '_actions', _('Quick Actions'));
 		actions.rawhtml = true;
 		actions.cfgvalue = function() {
-			return '<div style="margin-top:12px;">' +
-				'<button class="btn cbi-button-action" onclick="window.runetFixAction(\'restart\')">' + _('Restart Services') + '</button> ' +
-				'<button class="btn cbi-button-save" onclick="window.runetFixAction(\'update_adblock\')">' + _('Update Adblock Now') + '</button> ' +
-				'<button class="btn cbi-button-neutral" onclick="window.runetFixAction(\'test\')">' + _('Run Diagnostics') + '</button>' +
+			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">' +
+				'<button class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + _('Restart Services') + '</button> ' +
+				'<button class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + _('Update Adblock Now') + '</button> ' +
+				'<button class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + _('Refresh Status') + '</button>' +
 				'</div>' +
 				'<script>' +
 				'window.runetFixAction = function(act) {' +
 				'  var btn = event.target;' +
 				'  btn.disabled = true;' +
-				'  btn.innerText = "Processing...";' +
-				'  var cmd = "/usr/bin/runet-fix";' +
-				'  var args = [act];' +
-				'  L.resolveDefault(L.Request.get("/cgi-bin/luci/admin/services/runet-fix"), {}).then(function() {' +
-				'     return fs.exec_direct(cmd, args);' +
-				'  }).then(function(res) {' +
-				'     btn.disabled = false;' +
-				'     btn.innerText = "Done!";' +
-				'     location.reload();' +
-				'  }).catch(function() {' +
-				'     btn.disabled = false;' +
+				'  var oldText = btn.innerText;' +
+				'  btn.innerText = "Working...";' +
+				'  fs.exec_direct("/usr/bin/runet-fix", [act]).then(function(res) {' +
+				'     btn.innerText = "Success!";' +
+				'     setTimeout(function() { location.reload(); }, 1200);' +
+				'  }).catch(function(err) {' +
 				'     btn.innerText = "Error";' +
+				'     setTimeout(function() { btn.disabled = false; btn.innerText = oldText; }, 2000);' +
 				'  });' +
 				'};' +
 				'</script>';

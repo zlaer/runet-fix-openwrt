@@ -10,7 +10,8 @@
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read" ]
 			},
 			"ubus": {
-				"service": [ "list" ]
+				"service": [ "list" ],
+				"file": [ "exec", "read", "stat" ]
 			}
 		},
 		"write": {
@@ -21,6 +22,7 @@
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "write" ]
 			},
 			"ubus": {
+				"service": [ "set", "event" ],
 				"file": [ "exec" ]
 			}
 		}
