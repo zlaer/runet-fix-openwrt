@@ -157,7 +157,8 @@ async def do_fallback(reader, writer, relay_init, label,
             ok = await _cfproxy_worker_fallback(
                 reader, writer, relay_init, label, ctx,
                 dc=dc, is_test_dc=is_test_dc, is_media=is_media,
-                fallback_dst=fallback_dst, splitter=splitter)
+                fallback_dst=fallback_dst, splitter=splitter,
+                client_proto=proto_tag)
             if ok:
                 return True
         elif method == 'cf':
@@ -171,7 +172,8 @@ async def do_fallback(reader, writer, relay_init, label,
             ok = await _cfproxy_fallback(
                 reader, writer, relay_init, label, ctx,
                 dc=dc, is_media=is_media,
-                splitter=splitter)
+                splitter=splitter,
+                client_proto=proto_tag)
             if ok:
                 return True
         elif method == 'tcp' and fallback_dst:
@@ -187,7 +189,8 @@ async def _cfproxy_worker_fallback(reader, writer, relay_init, label,
                                    ctx: CryptoCtx,
                                    dc: int, is_test_dc: bool, is_media: bool,
                                    fallback_dst: str,
-                                   splitter=None):
+                                   splitter=None,
+                                   client_proto=PROTO_TAG_ABRIDGED):
     media_tag = ' media' if is_media else ''
     worker_domains = proxy_config.cfproxy_worker_domains
     if not worker_domains:
@@ -229,14 +232,16 @@ async def _cfproxy_worker_fallback(reader, writer, relay_init, label,
     await ws.send(relay_init)
     await bridge_ws_reencrypt(reader, writer, ws, label, ctx,
                               dc=dc, is_media=is_media,
-                              splitter=None)
+                              splitter=splitter,
+                              client_proto=client_proto)
     return True
 
 
 async def _cfproxy_fallback(reader, writer, relay_init, label,
                             ctx: CryptoCtx,
                             dc: int, is_media: bool,
-                            splitter=None):
+                            splitter=None,
+                            client_proto=PROTO_TAG_ABRIDGED):
     media_tag = ' media' if is_media else ''
     ws = None
     chosen_domain = None
@@ -268,7 +273,8 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
     await ws.send(relay_init)
     await bridge_ws_reencrypt(reader, writer, ws, label, ctx,
                                dc=dc, is_media=is_media,
-                               splitter=splitter)
+                               splitter=splitter,
+                               client_proto=client_proto)
     return True
 
 
@@ -317,12 +323,16 @@ async def _tcp_fallback(reader, writer, dst, port, relay_init, label, ctx: Crypt
 async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                                ctx: CryptoCtx,
                                dc=None, is_media=False,
-                               splitter: Optional[MsgSplitter] = None):
+                               splitter: Optional[MsgSplitter] = None,
+                               client_proto: Optional[bytes] = None):
     """
-    Bidirectional TCP(client) <-> WS(telegram) with re-encryption.
-    client ciphertext → decrypt(clt_key) → encrypt(tg_key) → WS
-    WS data → decrypt(tg_key) → encrypt(clt_key) → client TCP
+    Bidirectional TCP(client) <-> WS(telegram) with re-encryption and framing translation.
+    Upstream WS connection is always INTERMEDIATE MTProto framing.
+    Client TCP may be ABRIDGED (default for transparent interception) or INTERMEDIATE.
     """
+    if client_proto is None:
+        client_proto = PROTO_TAG_ABRIDGED
+
     dc_tag = f"DC{dc}{'m' if is_media else ''}" if dc else "DC?"
 
     up_bytes = 0
@@ -335,18 +345,11 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
 
     async def tcp_to_ws():
         nonlocal up_bytes, up_packets, close_reason
+        client_buf = bytearray()
         try:
             while True:
                 chunk = await reader.read(65536)
                 if not chunk:
-                    if splitter:
-                        tail = splitter.flush()
-                        if tail:
-                            if activity is not None:
-                                activity.send_started()
-                            await ws.send(tail[0])
-                            if activity is not None:
-                                activity.sent(len(tail[0]))
                     break
                 n = len(chunk)
                 if activity is not None:
@@ -354,26 +357,68 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                 stats.bytes_up += n
                 up_bytes += n
                 up_packets += 1
+
                 plain = ctx.clt_dec.update(chunk)
-                chunk = ctx.tg_enc.update(plain)
-                if splitter:
-                    parts = splitter.split(chunk, plain)
-                    if not parts:
-                        continue
-                    if activity is not None:
-                        activity.send_started()
-                    if len(parts) > 1:
-                        await ws.send_batch(parts)
-                    else:
-                        await ws.send(parts[0])
-                    if activity is not None:
-                        activity.sent(sum(map(len, parts)))
+                client_buf.extend(plain)
+
+                frames = []
+                if client_proto == PROTO_TAG_ABRIDGED:
+                    while client_buf:
+                        first = client_buf[0]
+                        qa = bool(first & 0x80)
+                        if first in (0x7F, 0xFF):
+                            if len(client_buf) < 4:
+                                break
+                            w = int.from_bytes(client_buf[1:4], 'little')
+                            payload_len = w * 4
+                            hdr_len = 4
+                        else:
+                            w = first & 0x7F
+                            payload_len = w * 4
+                            hdr_len = 1
+
+                        if payload_len > 16777216:
+                            log.warning("[%s] %s invalid client packet len: %d", label, dc_tag, payload_len)
+                            close_reason = f"client: bad len {payload_len}"
+                            return
+
+                        total_len = hdr_len + payload_len
+                        if len(client_buf) < total_len:
+                            break
+
+                        body = bytes(client_buf[hdr_len:total_len])
+                        del client_buf[:total_len]
+
+                        inter_pkt = struct.pack('<I', len(body) | (0x80000000 if qa else 0)) + body
+                        enc_frame = ctx.tg_enc.update(inter_pkt)
+                        frames.append(enc_frame)
                 else:
+                    while len(client_buf) >= 4:
+                        raw_len = struct.unpack('<I', client_buf[:4])[0]
+                        payload_len = raw_len & 0x7FFFFFFF
+                        if payload_len > 16777216:
+                            log.warning("[%s] %s invalid client packet len: %d", label, dc_tag, payload_len)
+                            close_reason = f"client: bad len {payload_len}"
+                            return
+                        total_len = 4 + payload_len
+                        if len(client_buf) < total_len:
+                            break
+
+                        pkt = bytes(client_buf[:total_len])
+                        del client_buf[:total_len]
+
+                        enc_frame = ctx.tg_enc.update(pkt)
+                        frames.append(enc_frame)
+
+                if frames:
                     if activity is not None:
                         activity.send_started()
-                    await ws.send(chunk)
+                    if len(frames) > 1:
+                        await ws.send_batch(frames)
+                    else:
+                        await ws.send(frames[0])
                     if activity is not None:
-                        activity.sent(len(chunk))
+                        activity.sent(sum(map(len, frames)))
         except asyncio.CancelledError:
             return
         except (ConnectionError, OSError) as e:
@@ -384,6 +429,7 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
 
     async def ws_to_tcp():
         nonlocal down_bytes, down_packets, close_reason
+        ws_buf = bytearray()
         try:
             while True:
                 data = await ws.recv()
@@ -397,12 +443,47 @@ async def bridge_ws_reencrypt(reader, writer, ws: RawWebSocket, label,
                 stats.bytes_down += n
                 down_bytes += n
                 down_packets += 1
+
                 plain = ctx.tg_dec.update(data)
-                data = ctx.clt_enc.update(plain)
-                writer.write(data)
-                await writer.drain()
-                if activity is not None:
-                    activity.delivered(n)
+                ws_buf.extend(plain)
+
+                out_chunks = []
+                while len(ws_buf) >= 4:
+                    raw_len = struct.unpack('<I', ws_buf[:4])[0]
+                    qa = bool(raw_len & 0x80000000)
+                    payload_len = raw_len & 0x7FFFFFFF
+                    if payload_len > 16777216:
+                        log.warning("[%s] %s invalid upstream packet len: %d", label, dc_tag, payload_len)
+                        close_reason = f"upstream: bad len {payload_len}"
+                        return
+                    total_len = 4 + payload_len
+                    if len(ws_buf) < total_len:
+                        break
+
+                    body = bytes(ws_buf[4:total_len])
+                    del ws_buf[:total_len]
+
+                    if client_proto == PROTO_TAG_ABRIDGED:
+                        if len(body) % 4 != 0:
+                            body += b'\x00' * (4 - (len(body) % 4))
+                        words = len(body) // 4
+                        if words < 0x7F:
+                            hdr = bytes([words | (0x80 if qa else 0)])
+                        else:
+                            hdr = bytes([0xFF if qa else 0x7F]) + words.to_bytes(3, 'little')
+                        client_pkt = hdr + body
+                    else:
+                        client_pkt = struct.pack('<I', len(body) | (0x80000000 if qa else 0)) + body
+
+                    enc_data = ctx.clt_enc.update(client_pkt)
+                    out_chunks.append(enc_data)
+
+                if out_chunks:
+                    for chunk in out_chunks:
+                        writer.write(chunk)
+                    await writer.drain()
+                    if activity is not None:
+                        activity.delivered(sum(map(len, out_chunks)))
         except asyncio.CancelledError:
             return
         except (ConnectionError, OSError) as e:

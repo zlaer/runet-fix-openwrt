@@ -414,11 +414,6 @@ async def _handle_client(reader, writer, secret: bytes):
             await _handle_http_api(clt_reader, clt_writer, handshake, orig_dest_ip, orig_dest_port or 80, label)
             return
 
-        # If port 80 and not POST /api, close immediately (no 6-second hang on dead port 80 direct connections)
-        if orig_dest_port == 80 and not handshake.startswith(b'POST'):
-            clt_writer.close()
-            return
-
         # Try transparent handshake first (direct client connection without MTProxy secret)
         result = _try_handshake_transparent(handshake)
         is_transparent = True
@@ -432,7 +427,8 @@ async def _handle_client(reader, writer, secret: bytes):
 
         if result is None:
             stats.connections_bad += 1
-            log.warning("[%s] bad handshake (wrong secret or proto)", label)
+            log.warning("[%s] bad handshake (wrong secret or proto) dst=%s:%s first_bytes=%s (%r)",
+                        label, orig_dest_ip, orig_dest_port, handshake[:16].hex(), handshake[:16])
             try:
                 while await clt_reader.read(4096):
                     pass
@@ -461,7 +457,8 @@ async def _handle_client(reader, writer, secret: bytes):
         log.info("[%s] Telegram DC%d%s session (transparent=%s, proto=0x%08X)",
                  label, dc, ' media' if is_media else '', is_transparent, proto_int)
 
-        relay_init = _generate_relay_init(proto_tag, dc_idx)
+        # Telegram Cloudflare WebSocket relays (kws{dc}) require PROTO_TAG_INTERMEDIATE
+        relay_init = _generate_relay_init(PROTO_TAG_INTERMEDIATE, dc_idx)
         ctx = _build_crypto_ctx(client_dec_prekey_iv, secret_used, relay_init)
 
         media_tag = " media" if is_media else ""
@@ -499,7 +496,8 @@ async def _handle_client(reader, writer, secret: bytes):
 
         await bridge_ws_reencrypt(clt_reader, clt_writer, ws, label, ctx,
                                    dc=dc, is_media=is_media,
-                                   splitter=splitter)
+                                   splitter=splitter,
+                                   client_proto=proto_tag)
 
     except asyncio.TimeoutError:
         log.warning("[%s] timeout during handshake", label)
