@@ -177,7 +177,7 @@ async def _handle_http_api(reader: asyncio.StreamReader, writer: asyncio.StreamW
         for base_dom in candidate_domains:
             host = f"kws{dc_id}.{base_dom}"
             try:
-                ws = await RawWebSocket.connect(host, host, path='/apiws', secure=True, timeout=4.0)
+                ws = await RawWebSocket.connect(host, host, path='/apiws', secure=True, timeout=8.0)
                 init = _generate_relay_init(PROTO_TAG_INTERMEDIATE, dc_id)
                 enc_k = init[SKIP_LEN:SKIP_LEN + PREKEY_LEN]
                 enc_iv = init[SKIP_LEN + PREKEY_LEN:SKIP_LEN + PREKEY_LEN + IV_LEN]
@@ -480,7 +480,8 @@ async def _handle_client(reader, writer, secret: bytes):
             return
 
         dc, is_media, proto_tag, client_dec_prekey_iv = result
-        if is_transparent and (dc == 0 or dc not in (1, 2, 3, 4, 5)):
+        if is_transparent:
+            is_media = False
             dc = _get_dc_from_ip(orig_dest_ip)
 
         is_test_dc = proxy_config.force_test_dc or dc >= 10000
@@ -495,7 +496,7 @@ async def _handle_client(reader, writer, secret: bytes):
         else:
             proto_int = PROTO_PADDED_INTERMEDIATE_INT
 
-        dc_idx = -dc if is_media else dc
+        dc_idx = dc
 
         log.info("[%s] Telegram DC%d%s session (transparent=%s, proto=0x%08X)",
                  label, dc, ' media' if is_media else '', is_transparent, proto_int)

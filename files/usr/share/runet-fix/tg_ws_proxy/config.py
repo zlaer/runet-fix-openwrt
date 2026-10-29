@@ -56,7 +56,16 @@ def _dd(s: str) -> str:
 
 
 _CFPROXY_PREPEND: List[str] = [
+    'cakeisalie.co.uk',
+    'kartoshka.co.uk',
+    'noskomnadzor.co.uk',
+    'onedaychamp.co.uk',
+    'fixtelega.co.uk',
+    'lovetrue.co.uk',
     'notelega.co.uk',
+    'sorokdva.co.uk',
+    'nothingthere.co.uk',
+    'stopblocking.co.uk',
     'pclead.co.uk',
     'offshor.co.uk',
     'pomogite.co.uk',
@@ -64,10 +73,7 @@ _CFPROXY_PREPEND: List[str] = [
     'pyatdesyatodin.co.uk',
     'ebally.co.uk',
     'nebally.co.uk',
-    'stopblocking.co.uk',
     'pyatdesyatdva.co.uk',
-    'cakeisalie.co.uk',
-    'noskomnadzor.co.uk',
 ]
 
 CFPROXY_DEFAULT_DOMAINS: List[str] = _CFPROXY_PREPEND + [d for d in [_dd(d) for d in _CFPROXY_ENC] if d not in _CFPROXY_PREPEND]
@@ -79,7 +85,13 @@ class ProxyConfig:
     port: int = 1443
     host: str = '0.0.0.0'
     secret: str = field(default_factory=lambda: os.urandom(16).hex())
-    dc_redirects: Dict[int, str] = field(default_factory=lambda: {2: '149.154.167.220', 4: '149.154.167.220'})
+    dc_redirects: Dict[int, str] = field(default_factory=lambda: {
+        1: '149.154.175.50',
+        2: '149.154.167.51',
+        3: '149.154.175.100',
+        4: '149.154.167.91',
+        5: '91.108.56.165'
+    })
     buffer_size: int = 256 * 1024
     pool_size: int = 0
     fallback_cfproxy: bool = True

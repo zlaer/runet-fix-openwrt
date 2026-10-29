@@ -177,7 +177,8 @@ start_service() {
         local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
         local tg_engine=$(uci -q get runet-fix.telegram.engine || echo "auto")
         local tg_secret=$(uci -q get runet-fix.telegram.secret || echo "")
-        local tg_pool_size=$(uci -q get runet-fix.telegram.pool_size || echo "0")
+        local tg_pool_size=$(uci -q get runet-fix.telegram.pool_size)
+        [ -z "$tg_pool_size" ] && tg_pool_size="2"
         local custom_domains=$(uci -q get runet-fix.telegram.custom_domains || echo "")
         local custom_workers=$(uci -q get runet-fix.telegram.custom_workers || echo "")
 

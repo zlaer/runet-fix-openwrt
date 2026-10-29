@@ -85,7 +85,7 @@ class _WsPool:
             connected = 0
             tasks = [asyncio.create_task(
                 self._connect_one(target_ip, domains,
-                                  WS_PATH_TEST if is_test_dc else WS_PATH))
+                                  WS_PATH_TEST if is_test_dc else WS_PATH, dc=dc))
                 for _ in range(needed)]
             for t in asyncio.as_completed(tasks):
                 try:
@@ -170,7 +170,22 @@ class _WsPool:
             if self._rotating.get(key) is asyncio.current_task():
                 self._rotating.pop(key, None)
 
-    async def _connect_one(self, target_ip, domains, path=WS_PATH) -> Optional[RawWebSocket]:
+    async def _connect_one(self, target_ip, domains, path=WS_PATH, dc=None) -> Optional[RawWebSocket]:
+        if dc:
+            from .balancer import balancer
+            for base_dom in balancer.get_domains_for_dc(dc):
+                host = f"kws{dc}.{base_dom}"
+                try:
+                    ws = await RawWebSocket.connect(
+                        host, host, timeout=6.0, path=path,
+                        secure=not proxy_config.disable_secure)
+                    log.debug("WS pool connected %s%s (CF relay)", host, path)
+                    return ws
+                except Exception as exc:
+                    stats.ws_errors += 1
+                    log.debug("WS pool connect %s failed: %r", host, exc)
+                    continue
+
         for domain in domains:
             modes = (True, False) if self.try_fronting_first else (False, True)
             for fronted in modes:

@@ -162,6 +162,10 @@ def create_ssl_context(*, check_hostname: bool = True) -> ssl.SSLContext:
         context = ssl.create_default_context()
     context.load_default_certs()
     context.check_hostname = check_hostname
+    try:
+        context.set_ecdh_curve("prime256v1")
+    except Exception:
+        pass
     return context
 
 

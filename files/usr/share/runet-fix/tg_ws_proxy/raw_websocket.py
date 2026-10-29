@@ -63,6 +63,12 @@ def set_sock_opts(transport, buffer_size):
         sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
     except (OSError, AttributeError):
         pass
+
+    try:
+        # SO_MARK = 36 on Linux: mark proxy outbound sockets so they bypass DPI mangle/NFQUEUE
+        sock.setsockopt(_socket.SOL_SOCKET, 36, 0x40000000)
+    except (OSError, AttributeError):
+        pass
     
     try:
         sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_RCVBUF, buffer_size)
@@ -104,9 +110,10 @@ class RawWebSocket:
                     host, 443,
                     ssl=ssl_context,
                     server_hostname=sni,
+                    family=_socket.AF_INET,
                 )
                 if secure
-                else asyncio.open_connection(host, 80)
+                else asyncio.open_connection(host, 80, family=_socket.AF_INET)
             ),
             timeout=min(timeout, 10),
         )

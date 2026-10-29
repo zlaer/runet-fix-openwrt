@@ -253,11 +253,12 @@ async def _cfproxy_fallback(reader, writer, relay_init, label,
     for base_domain in balancer.get_domains_for_dc(dc):
         domain = f'kws{dc}.{base_domain}'
         try:
-            ws = await RawWebSocket.connect(domain, domain, timeout=4.0, 
+            ws = await RawWebSocket.connect(domain, domain, timeout=10.0, 
                                             secure=not proxy_config.disable_secure)
             chosen_domain = base_domain
             break
         except Exception as exc:
+            balancer.report_failure(dc, base_domain)
             log.warning("[%s] DC%d%s CF proxy failed (%s): %s",
                         label, dc, media_tag, domain, repr(exc))
 
