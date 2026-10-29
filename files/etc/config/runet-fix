@@ -4,7 +4,7 @@ config global 'main'
 
 config zapret 'zapret'
 	option enabled '1'
-	option preset 'flowseal_general'
+	option preset 'youtube_4k'
 	option mode 'all'
 	option discord_fix '1'
 	option qnum '200'

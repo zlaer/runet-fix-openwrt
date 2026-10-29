@@ -10,7 +10,9 @@
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "read" ],
 				"/tmp/runet-fix-adblock.count": [ "read" ],
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read", "stat" ],
+				"/tmp/zapret-autotest-results.json": [ "read", "stat" ],
 				"/usr/bin/runet-fix": [ "exec" ],
+				"/usr/share/runet-fix/scripts/*": [ "exec" ],
 				"/sbin/logread": [ "exec" ]
 			},
 			"ubus": {
