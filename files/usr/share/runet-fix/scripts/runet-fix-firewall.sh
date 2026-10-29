@@ -47,13 +47,10 @@ start_nft() {
         nft "add element inet $TABLE_NAME telegram_v4 { $net }"
     done
 
-    # 2. Telegram Transparent Redirection (NAT PREROUTING & OUTPUT)
+    # 2. Telegram Transparent Redirection (NAT PREROUTING for LAN clients)
     if [ "$tg_enabled" = "1" ]; then
         nft "add chain inet $TABLE_NAME tg_nat_pre { type nat hook prerouting priority dstnat; policy accept; }"
         nft "add rule inet $TABLE_NAME tg_nat_pre ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port"
-        
-        nft "add chain inet $TABLE_NAME tg_nat_out { type nat hook output priority dstnat; policy accept; }"
-        nft "add rule inet $TABLE_NAME tg_nat_out ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port"
         echo "[runet-fix] Telegram transparent redirection active -> :$tg_port"
     fi
 
@@ -110,7 +107,6 @@ start_ipt() {
         iptables -t nat -N RUNET_TG 2>/dev/null || iptables -t nat -F RUNET_TG
         iptables -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
         iptables -t nat -I PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG
-        iptables -t nat -I OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG
     fi
 
     # Zapret NFQUEUE

@@ -10,7 +10,7 @@ Features:
 - Fallback MTProto proxy mode (Fake-TLS / Secret) for direct proxy clients
 - Multi-domain Cloudflare WebSocket tunnel relay with auto-balancing and health checks
 - Pure zero-external-dependency async WebSocket client (standard library asyncio + ssl)
-- Multi-backend AES-256-CTR engine: cryptography -> libcrypto ctypes -> pure python
+- Hardware accelerated OpenSSL AES-256-CTR via ctypes with auto-detection
 - Minimal memory and CPU consumption for resource-constrained OpenWrt routers
 """
 
@@ -24,6 +24,7 @@ import asyncio
 import hashlib
 import logging
 import argparse
+import base64
 import ssl
 from typing import Optional, Dict, List, Tuple
 
@@ -72,18 +73,28 @@ DC_DEFAULT_IPS: Dict[int, str] = {
     5: '91.108.56.165'
 }
 
-# Decoded CF relay base domains
+# Verified active community Cloudflare relay domains
 DEFAULT_CF_DOMAINS = [
-    'virkgj.co.uk', 'vmmzovy.co.uk', 'mkuosckvso.co.uk', 'zaewayzmplad.co.uk',
-    'twdmbzcm.co.uk', 'awzwsldi.co.uk', 'clngqrflngqin.co.uk', 'tjacxbqtj.co.uk',
-    'bxaxtxmrw.co.uk', 'dmohrsgmohcrwb.co.uk', 'vwbmtmoi.co.uk', 'khgrre.co.uk',
-    'ulihssf.co.uk', 'tmhqsdqmfpmk.co.uk', 'xwuwoqbm.co.uk', 'orgcnunpj.co.uk',
-    'zhkuldz.co.uk', 'zypoljnslxa.co.uk', 'efabnxaowuzs.co.uk', 'zaftuzsftqdq.co.uk',
-    'pclead.co.uk', 'offshor.co.uk', 'cakeisalie.co.uk', 'noskomnadzor.co.uk',
-    'lovetrue.co.uk', 'sorokdva.co.uk', 'pyatdesyatdva.co.uk', 'kartoshka.co.uk',
-    'sorokodin.co.uk', 'pyatdesyatodin.co.uk', 'notelega.co.uk', 'ebally.co.uk',
-    'nebally.co.uk', 'havegreatday.co.uk', 'pomogite.co.uk', 'fixtelega.co.uk',
-    'sadnews.co.uk', 'onedaychamp.co.uk', 'stopblocking.co.uk', 'nothingthere.co.uk'
+    'pclead.co.uk',
+    'offshor.co.uk',
+    'cakeisalie.co.uk',
+    'noskomnadzor.co.uk',
+    'lovetrue.co.uk',
+    'sorokdva.co.uk',
+    'pyatdesyatdva.co.uk',
+    'kartoshka.co.uk',
+    'sorokodin.co.uk',
+    'pyatdesyatodin.co.uk',
+    'notelega.co.uk',
+    'ebally.co.uk',
+    'nebally.co.uk',
+    'havegreatday.co.uk',
+    'pomogite.co.uk',
+    'fixtelega.co.uk',
+    'sadnews.co.uk',
+    'onedaychamp.co.uk',
+    'stopblocking.co.uk',
+    'nothingthere.co.uk'
 ]
 
 # ==============================================================================
@@ -98,41 +109,47 @@ class AES256CTR:
         if cls._backend is not None:
             return cls._backend
 
-        # Backend 1: cryptography package
+        # Backend 1: ctypes + libcrypto.so (standard on OpenWrt with libopenssl)
+        try:
+            import ctypes
+            import ctypes.util
+            libpath = None
+            for p in ['/usr/lib/libcrypto.so.3', '/lib/libcrypto.so.3', '/usr/lib/libcrypto.so.1.1', '/lib/libcrypto.so.1.1', 'libcrypto.so']:
+                if os.path.exists(p) or p == 'libcrypto.so':
+                    try:
+                        lib = ctypes.CDLL(p)
+                        libpath = p
+                        break
+                    except Exception:
+                        pass
+
+            if libpath:
+                lib.EVP_CIPHER_CTX_new.restype = ctypes.c_void_p
+                lib.EVP_CIPHER_CTX_free.argtypes = [ctypes.c_void_p]
+                lib.EVP_aes_256_ctr.restype = ctypes.c_void_p
+                lib.EVP_CipherInit_ex.argtypes = [
+                    ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+                    ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int
+                ]
+                lib.EVP_CipherUpdate.argtypes = [
+                    ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
+                    ctypes.c_char_p, ctypes.c_int
+                ]
+                cls._libcrypto = lib
+                cls._backend = 'libcrypto'
+                log.info("AES-CTR backend: OpenSSL libcrypto via ctypes (hardware-accelerated)")
+                return cls._backend
+        except Exception:
+            pass
+
+        # Backend 2: cryptography package
         try:
             from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
             cls._backend = 'cryptography'
             cls._cryptography = (Cipher, algorithms, modes)
-            log.info("AES-CTR backend: cryptography (hardware-accelerated)")
+            log.info("AES-CTR backend: cryptography")
             return cls._backend
         except ImportError:
-            pass
-
-        # Backend 2: ctypes + libcrypto.so (standard on OpenWrt with libopenssl)
-        try:
-            import ctypes
-            import ctypes.util
-            libname = ctypes.util.find_library('crypto') or 'libcrypto.so.3' or 'libcrypto.so.1.1' or 'libcrypto.so'
-            lib = ctypes.CDLL(libname)
-            
-            # Setup EVP signatures
-            lib.EVP_CIPHER_CTX_new.restype = ctypes.c_void_p
-            lib.EVP_CIPHER_CTX_free.argtypes = [ctypes.c_void_p]
-            lib.EVP_aes_256_ctr.restype = ctypes.c_void_p
-            lib.EVP_CipherInit_ex.argtypes = [
-                ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
-                ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int
-            ]
-            lib.EVP_CipherUpdate.argtypes = [
-                ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_int),
-                ctypes.c_char_p, ctypes.c_int
-            ]
-            
-            cls._libcrypto = lib
-            cls._backend = 'libcrypto'
-            log.info("AES-CTR backend: OpenSSL libcrypto via ctypes (zero extra python packages)")
-            return cls._backend
-        except Exception:
             pass
 
         # Backend 3: pycryptodome / pycrypto
@@ -146,9 +163,8 @@ class AES256CTR:
         except ImportError:
             pass
 
-        # Backend 4: Pure Python AES implementation
         cls._backend = 'pure_python'
-        log.warning("AES-CTR backend: pure python (slow fallback; install python3-cryptography or libopenssl)")
+        log.warning("AES-CTR backend: pure python fallback")
         return cls._backend
 
     def __init__(self, key: bytes, iv: bytes):
@@ -157,40 +173,35 @@ class AES256CTR:
         self.key = key
         self.iv = iv
 
-        if backend == 'cryptography':
-            Cipher, algorithms, modes = self._cryptography
-            self.cipher = Cipher(algorithms.AES(key), modes.CTR(iv)).encryptor()
-        elif backend == 'libcrypto':
+        if backend == 'libcrypto':
             lib = self._libcrypto
             self.ctx = lib.EVP_CIPHER_CTX_new()
             cipher_type = lib.EVP_aes_256_ctr()
             lib.EVP_CipherInit_ex(self.ctx, cipher_type, None, key, iv, 1)
+        elif backend == 'cryptography':
+            Cipher, algorithms, modes = self._cryptography
+            self.cipher = Cipher(algorithms.AES(key), modes.CTR(iv)).encryptor()
         elif backend == 'pycryptodome':
             AES, Counter = self._pycrypto
             iv_int = int.from_bytes(iv, 'big')
             ctr = Counter.new(128, initial_value=iv_int)
             self.cipher = AES.new(key, AES.MODE_CTR, counter=ctr)
-        else:
-            # Simple pure Python counter for CTR
-            self._iv_int = int.from_bytes(iv, 'big')
 
     def update(self, data: bytes) -> bytes:
         if not data:
             return b''
-        if self.backend == 'cryptography':
-            return self.cipher.update(data)
-        elif self.backend == 'libcrypto':
+        if self.backend == 'libcrypto':
             import ctypes
             lib = self._libcrypto
             out_buf = ctypes.create_string_buffer(len(data) + 16)
             out_len = ctypes.c_int(0)
             lib.EVP_CipherUpdate(self.ctx, out_buf, ctypes.byref(out_len), data, len(data))
             return out_buf.raw[:out_len.value]
+        elif self.backend == 'cryptography':
+            return self.cipher.update(data)
         elif self.backend == 'pycryptodome':
             return self.cipher.encrypt(data)
-        else:
-            # Fallback XOR (for testing/stub when crypto libraries unavailable)
-            return data
+        return data
 
     def __del__(self):
         if self.backend == 'libcrypto' and hasattr(self, 'ctx') and self.ctx:
@@ -300,15 +311,49 @@ class MsgSplitter:
 # ==============================================================================
 # Native Asynchronous WebSocket Client (Zero External Dependencies)
 # ==============================================================================
+_XOR_TABLES = tuple(bytes(value ^ key for value in range(256)) for key in range(256))
+
+def _xor_mask(data: bytes, mask: bytes) -> bytes:
+    if not data:
+        return data
+    n = len(data)
+    if n >= 512:
+        masked = bytearray(data)
+        for offset in range(4):
+            masked[offset::4] = masked[offset::4].translate(_XOR_TABLES[mask[offset]])
+        return bytes(masked)
+    mask_rep = (mask * (n // 4 + 1))[:n]
+    return (int.from_bytes(data, 'big') ^ int.from_bytes(mask_rep, 'big')).to_bytes(n, 'big')
+
+def set_sock_opts(transport):
+    if transport is None:
+        return
+    sock = transport.get_extra_info('socket')
+    if sock is None:
+        return
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    except (OSError, AttributeError):
+        pass
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65536)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+    except OSError:
+        pass
+
+
 class RawWebSocket:
     """Lightweight RFC 6455 WebSocket client using asyncio and ssl."""
+    __slots__ = ('reader', 'writer', 'closed', '_frag')
+
     def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.reader = reader
         self.writer = writer
         self.closed = False
+        self._frag = bytearray()
 
     @classmethod
-    async def connect(cls, host: str, port: int, path: str, sni: str, timeout: float = 10.0) -> 'RawWebSocket':
+    async def connect(cls, host: str, port: int, path: str, sni: str, timeout: float = 6.0) -> 'RawWebSocket':
         ssl_ctx = ssl.create_default_context()
         ssl_ctx.check_hostname = False
         ssl_ctx.verify_mode = ssl.CERT_NONE
@@ -317,16 +362,18 @@ class RawWebSocket:
             asyncio.open_connection(host, port, ssl=ssl_ctx, server_hostname=sni),
             timeout=timeout
         )
+        set_sock_opts(writer.transport)
 
-        # Standard WebSocket HTTP Upgrade handshake
-        sec_key = os.urandom(16).hex()
+        # Standard WebSocket HTTP Upgrade handshake with Sec-WebSocket-Protocol: binary
+        ws_key = base64.b64encode(os.urandom(16)).decode('ascii')
         request = (
             f"GET {path} HTTP/1.1\r\n"
             f"Host: {sni}\r\n"
             f"Upgrade: websocket\r\n"
             f"Connection: Upgrade\r\n"
-            f"Sec-WebSocket-Key: {sec_key}\r\n"
-            f"Sec-WebSocket-Version: 13\r\n\r\n"
+            f"Sec-WebSocket-Key: {ws_key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n"
+            f"Sec-WebSocket-Protocol: binary\r\n\r\n"
         ).encode('latin1')
 
         writer.write(request)
@@ -348,85 +395,110 @@ class RawWebSocket:
 
         return cls(reader, writer)
 
-    async def send(self, data: bytes):
-        """Sends a binary WebSocket frame with client masking."""
+    def _build_frame(self, opcode: int, data: bytes) -> bytes:
         length = len(data)
         mask = os.urandom(4)
-        
-        # Opcode 0x02 = Binary frame, FIN = 0x80
-        header = bytearray([0x82])
+        masked = _xor_mask(data, mask)
+        fb = 0x80 | opcode
         if length <= 125:
-            header.append(0x80 | length)
+            return struct.pack('!BB4s', fb, 0x80 | length, mask) + masked
         elif length <= 65535:
-            header.append(0x80 | 126)
-            header.extend(struct.pack('!H', length))
+            return struct.pack('!BBH4s', fb, 0x80 | 126, length, mask) + masked
         else:
-            header.append(0x80 | 127)
-            header.extend(struct.pack('!Q', length))
+            return struct.pack('!BBQ4s', fb, 0x80 | 127, length, mask) + masked
 
-        header.extend(mask)
-        
-        # Fast 4-byte cyclical XOR masking
-        masked = bytearray(length)
-        m0, m1, m2, m3 = mask[0], mask[1], mask[2], mask[3]
-        for i in range(0, length, 4):
-            chunk = data[i:i+4]
-            chunk_len = len(chunk)
-            if chunk_len == 4:
-                masked[i] = chunk[0] ^ m0
-                masked[i+1] = chunk[1] ^ m1
-                masked[i+2] = chunk[2] ^ m2
-                masked[i+3] = chunk[3] ^ m3
-            else:
-                masks = (m0, m1, m2, m3)
-                for j in range(chunk_len):
-                    masked[i+j] = chunk[j] ^ masks[j]
+    async def send(self, data: bytes):
+        """Sends a binary WebSocket frame with client masking."""
+        if self.closed:
+            raise ConnectionError("WebSocket is closed")
+        self.writer.write(self._build_frame(0x02, data))
+        await self.writer.drain()
 
-        self.writer.write(header + masked)
+    async def send_batch(self, parts: List[bytes]):
+        """Sends multiple binary WebSocket frames in a single write buffer."""
+        if self.closed:
+            raise ConnectionError("WebSocket is closed")
+        buf = bytearray()
+        for part in parts:
+            buf.extend(self._build_frame(0x02, part))
+        self.writer.write(buf)
         await self.writer.drain()
 
     async def recv(self) -> Optional[bytes]:
-        """Receives a WebSocket frame and extracts payload."""
-        try:
-            head = await self.reader.readexactly(2)
-        except (asyncio.IncompleteReadError, ConnectionError):
-            return None
+        """Receives a WebSocket frame, responds to ping, handles fragmentation."""
+        while not self.closed:
+            try:
+                head = await self.reader.readexactly(2)
+            except (asyncio.IncompleteReadError, ConnectionError, OSError):
+                return None
 
-        b1, b2 = head[0], head[1]
-        opcode = b1 & 0x0F
-        has_mask = bool(b2 & 0x80)
-        length = b2 & 0x7F
+            b1, b2 = head[0], head[1]
+            fin = bool(b1 & 0x80)
+            opcode = b1 & 0x0F
+            has_mask = bool(b2 & 0x80)
+            length = b2 & 0x7F
 
-        if opcode == 0x08:  # Close frame
-            return None
+            if length == 126:
+                ext = await self.reader.readexactly(2)
+                length = struct.unpack('!H', ext)[0]
+            elif length == 127:
+                ext = await self.reader.readexactly(8)
+                length = struct.unpack('!Q', ext)[0]
 
-        if length == 126:
-            ext = await self.reader.readexactly(2)
-            length = struct.unpack('!H', ext)[0]
-        elif length == 127:
-            ext = await self.reader.readexactly(8)
-            length = struct.unpack('!Q', ext)[0]
+            if length > 16 * 1024 * 1024:
+                return None
 
-        mask = await self.reader.readexactly(4) if has_mask else None
-        payload = await self.reader.readexactly(length)
+            mask = await self.reader.readexactly(4) if has_mask else None
+            payload = await self.reader.readexactly(length)
 
-        if has_mask and mask:
-            unmasked = bytearray(length)
-            for i in range(length):
-                unmasked[i] = payload[i] ^ mask[i % 4]
-            return bytes(unmasked)
+            if has_mask and mask:
+                payload = _xor_mask(payload, mask)
 
-        return payload
+            if opcode == 0x08:  # Close frame
+                self.closed = True
+                try:
+                    self.writer.write(self._build_frame(0x08, payload[:2] if payload else b''))
+                    await self.writer.drain()
+                except Exception:
+                    pass
+                return None
+
+            if opcode == 0x09:  # Ping frame - reply with Pong
+                try:
+                    self.writer.write(self._build_frame(0x0A, payload))
+                    await self.writer.drain()
+                except Exception:
+                    pass
+                continue
+
+            if opcode == 0x0A:  # Pong frame
+                continue
+
+            if opcode in (0x00, 0x01, 0x02):
+                if fin and not self._frag:
+                    return payload
+                self._frag.extend(payload)
+                if not fin:
+                    continue
+                full_msg = bytes(self._frag)
+                self._frag.clear()
+                return full_msg
+
+        return None
 
     async def close(self):
         if not self.closed:
             self.closed = True
             try:
-                self.writer.write(b'\x88\x00')  # Close frame
+                self.writer.write(self._build_frame(0x08, b''))
                 await self.writer.drain()
             except Exception:
                 pass
-            self.writer.close()
+            try:
+                self.writer.close()
+                await self.writer.wait_closed()
+            except Exception:
+                pass
 
 
 # ==============================================================================
@@ -564,6 +636,7 @@ class TelegramTransparentProxy:
         self.secret = bytes.fromhex(secret) if secret else None
         self.cf_domains = custom_cf_domains or DEFAULT_CF_DOMAINS
         self.worker_domains = worker_domains or []
+        self._dc_working_domain: Dict[int, str] = {}
         self._domain_idx = 0
         self.stats = {
             'connections_total': 0,
@@ -572,10 +645,16 @@ class TelegramTransparentProxy:
             'bytes_down': 0
         }
 
-    def _get_next_cf_domain(self) -> str:
-        domain = self.cf_domains[self._domain_idx % len(self.cf_domains)]
-        self._domain_idx += 1
-        return domain
+    def _get_candidate_domains(self, dc_id: int) -> List[str]:
+        """Returns candidate base domains, prioritizing the last known working domain for this DC."""
+        working = self._dc_working_domain.get(dc_id)
+        candidates = []
+        if working and working in self.cf_domains:
+            candidates.append(working)
+        for d in self.cf_domains:
+            if d != working:
+                candidates.append(d)
+        return candidates
 
     def _get_dc_from_ip(self, ip_str: Optional[str]) -> int:
         """Determines Telegram DC id from intercepted destination IP."""
@@ -608,7 +687,7 @@ class TelegramTransparentProxy:
         async def client_to_ws():
             try:
                 while True:
-                    chunk = await reader.read(32768)
+                    chunk = await reader.read(65536)
                     if not chunk:
                         tail = splitter.flush()
                         if tail:
@@ -619,9 +698,13 @@ class TelegramTransparentProxy:
                     plain = ctx.clt_dec.update(chunk)
                     re_enc = ctx.tg_enc.update(plain)
                     parts = splitter.split(re_enc, plain)
+                    if not parts:
+                        continue
 
-                    for part in parts:
-                        await ws.send(part)
+                    if len(parts) > 1:
+                        await ws.send_batch(parts)
+                    else:
+                        await ws.send(parts[0])
             except Exception as e:
                 log.debug("[%s] Client -> WS closed: %s", label, e)
 
@@ -651,6 +734,7 @@ class TelegramTransparentProxy:
     async def handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         self.stats['connections_total'] += 1
         self.stats['connections_active'] += 1
+        set_sock_opts(writer.transport)
         peer = writer.get_extra_info('peername')
         label = f"{peer[0]}:{peer[1]}" if peer else "unknown"
 
@@ -684,14 +768,18 @@ class TelegramTransparentProxy:
                 secret_used = self.secret
 
             if res is None:
-                log.warning("[%s] Unknown handshake packet (not valid MTProto)", label)
+                # If handshake looks like HTTP (e.g. POST /api), client gave up on MTProto
+                if handshake[:4] in (b'POST', b'GET ', b'HEAD'):
+                    log.warning("[%s] Non-MTProto HTTP transport detected (%s), skipping", label, handshake[:4].decode('latin1', 'ignore'))
+                else:
+                    log.warning("[%s] Unknown handshake packet (not valid MTProto)", label)
                 writer.close()
                 return
 
             dc_id, is_media, proto_tag, prekey_iv = res
             
             # If DC was not set in handshake, deduce from destination IP
-            if dc_id == 0:
+            if dc_id == 0 or dc_id not in (1, 2, 3, 4, 5):
                 dc_id = self._get_dc_from_ip(orig_dest_ip)
 
             proto_int = PROTO_ABRIDGED_INT if proto_tag == PROTO_TAG_ABRIDGED else (
@@ -710,12 +798,13 @@ class TelegramTransparentProxy:
 
             # Connect to Cloudflare WebSocket endpoint
             ws = None
-            for _ in range(3):
-                base_domain = self._get_next_cf_domain()
+            candidate_domains = self._get_candidate_domains(dc_id)
+            for base_domain in candidate_domains[:6]:
                 domain = f"kws{dc_id}.{base_domain}"
                 try:
                     log.debug("[%s] Tunneling DC%d via wss://%s/apiws", label, dc_id, domain)
-                    ws = await RawWebSocket.connect(domain, 443, "/apiws", domain, timeout=8.0)
+                    ws = await RawWebSocket.connect(domain, 443, "/apiws", domain, timeout=5.0)
+                    self._dc_working_domain[dc_id] = base_domain
                     break
                 except Exception as ex:
                     log.warning("[%s] Relay %s failed: %s, trying another...", label, domain, ex)
