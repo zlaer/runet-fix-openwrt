@@ -24,6 +24,7 @@ find_nfqws() {
 get_zapret_args() {
     local preset="$1"
     local custom="$2"
+    local bin_dir="/usr/share/runet-fix/bin"
 
     case "$preset" in
         youtube_4k)
@@ -51,78 +52,73 @@ get_zapret_args() {
             echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3"
             ;;
         general_alt)
-            echo "--dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00"
+            echo "--dpi-desync=fake,fakedsplit --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fakedsplit-pattern=0x00 --dpi-desync-fake-tls=$bin_dir/stun.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt2)
-            echo "--dpi-desync=multisplit --dpi-desync-split-pos=2"
+            echo "--dpi-desync=multisplit --dpi-desync-split-seqovl=652 --dpi-desync-split-pos=2 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin"
             ;;
         general_alt3)
-            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts"
+            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fake-tls-mod=rnd,dupsid,sni=ya.ru --dpi-desync-hostfakesplit-mod=host=ya.ru,altorder=1 --dpi-desync-fooling=ts --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt4)
-            echo "--dpi-desync=fake,multisplit --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=1000 --dpi-desync-fake-tls=$bin_dir/stun.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt5)
             echo "--dpi-desync=syndata,multidisorder"
             ;;
         general_alt6)
-            echo "--dpi-desync=multisplit --dpi-desync-split-pos=1"
+            echo "--dpi-desync=multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin"
             ;;
         general_alt7)
-            echo "--dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1"
+            echo "--dpi-desync=multisplit --dpi-desync-split-pos=2,sniext+1 --dpi-desync-split-seqovl=679 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin"
             ;;
         general_alt8)
-            echo "--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-fake-tls-mod=none --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt9)
-            echo "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts,md5sig --dpi-desync-repeats=4"
+            echo "--dpi-desync=hostfakesplit --dpi-desync-repeats=4 --dpi-desync-fooling=ts,md5sig --dpi-desync-hostfakesplit-mod=host=ozon.ru"
             ;;
         general_alt10)
-            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls=$bin_dir/stun.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_4pda_to.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt11)
-            local bin_dir="/usr/share/runet-fix/bin"
-            if [ -f "$bin_dir/tls_clienthello_www_sferum_ru.bin" ]; then
-                echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=664 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
-            else
-                echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
-            fi
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=664 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt12)
-            echo "--dpi-desync=hostfakesplit --dpi-desync-fooling=ts"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=664 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-tls=$bin_dir/stun.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_alt13)
-            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-repeats=5"
+            echo "--dpi-desync=fake,hostfakesplit --dpi-desync-fooling=ts --dpi-desync-hostfakesplit-mod=host=mail.ru,altorder=1 --dpi-desync-repeats=5 --dpi-desync-fake-tls=$bin_dir/tls_clienthello_sochi_park.bin --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_sochi_park.bin"
             ;;
         general_fake_tls_auto)
-            echo "--dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-fooling=badseq --dpi-desync-repeats=11"
+            echo "--dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-repeats=11 --dpi-desync-fooling=badseq --dpi-desync-fake-tls=0x00000000"
             ;;
         general_fake_tls_alt)
-            echo "--dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-repeats=8 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_fake_tls_alt2)
-            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=10000000 --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_fake_tls_alt3)
-            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_simple_fake)
-            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_simple_fake_alt)
-            echo "--dpi-desync=fake --dpi-desync-fooling=badseq --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_simple_fake_alt2)
-            echo "--dpi-desync=fake --dpi-desync-fooling=ts --dpi-desync-cutoff=n5 --dpi-desync-repeats=6"
+            echo "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         general_exp)
-            echo "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+            echo "--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=480 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=4 --dpi-desync-split-seqovl-pattern=$bin_dir/stun2.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http=$bin_dir/tls_clienthello_www_sferum_ru.bin"
             ;;
         custom)
             echo "$custom"
             ;;
         flowseal_general|*)
-            echo "--dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+            echo "--dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_4pda_to.bin"
             ;;
     esac
 }

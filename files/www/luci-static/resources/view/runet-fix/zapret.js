@@ -125,7 +125,7 @@ return view.extend({
 		
 		// Standard Presets
 		preset.value('youtube_4k', 'YouTube 4K Multisplit (Recommended - Multisplit + Seqovl)');
-		preset.value('flowseal_general', 'Flowseal General (Universal Fake + Split2, badseq, md5sig)');
+		preset.value('flowseal_general', 'Flowseal General (Multisplit Pos 1 Seqovl 568 + 4PDA BIN)');
 		preset.value('fakedsplit_badseq', 'Fakedsplit (Combined Fake + Data Split)');
 		preset.value('multisplit_badsum', 'Multisplit Badsum (Multisplit with Bad Checksum)');
 		preset.value('disorder2_badseq', 'Disorder2 Out-of-Order (TCP Reassembly Desync)');
@@ -135,27 +135,27 @@ return view.extend({
 		preset.value('discord_fix', 'Discord Full Fix (STUN Fake UDP + Media TCP 2053-8443)');
 
 		// Additional Desktop Alternative Configs (Flowseal ALT Suite)
-		preset.value('general_alt', 'Flowseal ALT (Fake + Fakedsplit TS, Pattern 0x00)');
-		preset.value('general_alt2', 'Flowseal ALT2 (Multisplit Pos 2)');
-		preset.value('general_alt3', 'Flowseal ALT3 (Fake + Hostfakesplit TS)');
-		preset.value('general_alt4', 'Flowseal ALT4 (Fake + Multisplit Badseq R6)');
+		preset.value('general_alt', 'Flowseal ALT (Fake + Fakedsplit TS + STUN/Google/Sferum BIN)');
+		preset.value('general_alt2', 'Flowseal ALT2 (Multisplit Pos 2 Seqovl 652 + Google BIN)');
+		preset.value('general_alt3', 'Flowseal ALT3 (Fake + Hostfakesplit TS + ya.ru SNI)');
+		preset.value('general_alt4', 'Flowseal ALT4 (Fake + Multisplit Badseq 1000 + Google BIN)');
 		preset.value('general_alt5', 'Flowseal ALT5 (Syndata Multidisorder)');
-		preset.value('general_alt6', 'Flowseal ALT6 (Multisplit Pos 1)');
-		preset.value('general_alt7', 'Flowseal ALT7 (Multisplit Pos 2 + Sniext)');
-		preset.value('general_alt8', 'Flowseal ALT8 (Fake Badseq R6)');
-		preset.value('general_alt9', 'Flowseal ALT9 (Hostfakesplit TS + MD5Sig R4)');
-		preset.value('general_alt10', 'Flowseal ALT10 (Fake TS R6)');
-		preset.value('general_alt11', 'Flowseal ALT11 (Fake + Multisplit Pos 1 TS R8)');
-		preset.value('general_alt12', 'Flowseal ALT12 (Hostfakesplit Simple TS)');
-		preset.value('general_alt13', 'Flowseal ALT13 (Fake + Hostfakesplit TS R5)');
+		preset.value('general_alt6', 'Flowseal ALT6 (Multisplit Pos 1 Seqovl 681 + Google BIN)');
+		preset.value('general_alt7', 'Flowseal ALT7 (Multisplit Pos 2 + Sniext Seqovl 679 + Google BIN)');
+		preset.value('general_alt8', 'Flowseal ALT8 (Fake Badseq 2 + Sferum BIN)');
+		preset.value('general_alt9', 'Flowseal ALT9 (Hostfakesplit TS + MD5Sig R4 + ozon.ru SNI)');
+		preset.value('general_alt10', 'Flowseal ALT10 (Fake TS R6 + 4PDA/Sferum BIN)');
+		preset.value('general_alt11', 'Flowseal ALT11 (Fake + Multisplit Pos 1 TS Seqovl 664 + Sferum BIN)');
+		preset.value('general_alt12', 'Flowseal ALT12 (Fake + Multisplit Pos 1 TS Seqovl 664 + STUN/Sferum BIN)');
+		preset.value('general_alt13', 'Flowseal ALT13 (Fake + Hostfakesplit TS + mail.ru + Sochi Park BIN)');
 		preset.value('general_fake_tls_auto', 'Flowseal FAKE TLS AUTO (Multidisorder Midsld Badseq R11)');
-		preset.value('general_fake_tls_alt', 'Flowseal FAKE TLS ALT (Fake + Fakedsplit Pos 1 Badseq R8)');
-		preset.value('general_fake_tls_alt2', 'Flowseal FAKE TLS ALT2 (Fake + Multisplit Pos 1 Badseq R8)');
-		preset.value('general_fake_tls_alt3', 'Flowseal FAKE TLS ALT3 (Fake + Multisplit Pos 1 TS R8)');
-		preset.value('general_simple_fake', 'Flowseal SIMPLE FAKE (Fake TS R6)');
-		preset.value('general_simple_fake_alt', 'Flowseal SIMPLE FAKE ALT (Fake Badseq R6)');
-		preset.value('general_simple_fake_alt2', 'Flowseal SIMPLE FAKE ALT2 (Fake TS Cutoff n5 R6)');
-		preset.value('general_exp', 'Flowseal EXP (Experimental Multisplit TS R8)');
+		preset.value('general_fake_tls_alt', 'Flowseal FAKE TLS ALT (Fake + Fakedsplit Pos 1 Badseq 2 + Sferum BIN)');
+		preset.value('general_fake_tls_alt2', 'Flowseal FAKE TLS ALT2 (Fake + Multisplit Pos 1 Badseq 10M Seqovl 681)');
+		preset.value('general_fake_tls_alt3', 'Flowseal FAKE TLS ALT3 (Fake + Multisplit Pos 1 TS Seqovl 681 + Google BIN)');
+		preset.value('general_simple_fake', 'Flowseal SIMPLE FAKE (Fake TS R6 + Google/Sferum BIN)');
+		preset.value('general_simple_fake_alt', 'Flowseal SIMPLE FAKE ALT (Fake Badseq 2 + STUN2/Google/Sferum BIN)');
+		preset.value('general_simple_fake_alt2', 'Flowseal SIMPLE FAKE ALT2 (Fake TS R6 + STUN2/Sferum BIN)');
+		preset.value('general_exp', 'Flowseal EXP (Experimental Multisplit TS Seqovl 480 + STUN2/Sferum BIN)');
 
 		preset.value('custom', t.preset_custom);
 		preset.default = 'youtube_4k';
