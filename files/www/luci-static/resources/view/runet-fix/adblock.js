@@ -35,9 +35,9 @@ return view.extend({
 		info.rawhtml = true;
 		info.cfgvalue = function() {
 			if (totalBlocked > 0) {
-				return '<span style="color:#28a745;font-weight:bold;">● ACTIVE:</span> <strong>' + totalBlocked.toLocaleString() + '</strong> ' + _('unique ad/tracking domains currently blocked in dnsmasq.');
+				return '<span class="badge" style="background:#28a745;color:#fff;padding:3px 6px;border-radius:3px;font-weight:bold;">ACTIVE</span> <strong>' + totalBlocked.toLocaleString() + '</strong> ' + _('unique ad/tracking domains currently blocked in dnsmasq.');
 			} else {
-				return '<span style="color:#dc3545;font-weight:bold;">● INACTIVE:</span> ' + _('No active blocking rules loaded.');
+				return '<span class="badge" style="background:#dc3545;color:#fff;padding:3px 6px;border-radius:3px;font-weight:bold;">INACTIVE</span> ' + _('No active blocking rules loaded.');
 			}
 		};
 

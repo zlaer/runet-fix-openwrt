@@ -21,6 +21,14 @@ case "$1" in
     firewall)
         /usr/share/runet-fix/scripts/runet-fix-firewall.sh status
         ;;
+    uninstall)
+        if [ -x /usr/share/runet-fix/scripts/uninstall.sh ]; then
+            exec /usr/share/runet-fix/scripts/uninstall.sh
+        else
+            echo "Error: /usr/share/runet-fix/scripts/uninstall.sh not found!"
+            exit 1
+        fi
+        ;;
     test)
         if [ "$2" = "--json" ]; then
             yt_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
@@ -43,7 +51,7 @@ case "$1" in
             dns_ok=0; if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then dns_ok=1; fi
             ad_ok=0; if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then ad_ok=1; fi
 
-            cat <<EOF
+            test_json=$(cat <<EOF
 {
   "youtube": {"ok": $yt_ok, "code": "$yt_code", "ms": $yt_ms},
   "discord": {"ok": $dc_ok, "code": "$dc_code", "ms": $dc_ms},
@@ -51,6 +59,9 @@ case "$1" in
   "dns": {"ok": $dns_ok, "adblock_ok": $ad_ok}
 }
 EOF
+)
+            echo "$test_json"
+            echo "$test_json" > /tmp/runet-fix-test.json 2>/dev/null
             exit 0
         fi
 
@@ -78,7 +89,7 @@ EOF
         ;;
     *)
         echo "runet-fix CLI - All-in-One DPI Bypass, Telegram Fix & Adblock"
-        echo "Usage: runet-fix {start|stop|restart|status|update-adblock|firewall|test|log}"
+        echo "Usage: runet-fix {start|stop|restart|status|update-adblock|firewall|test|log|uninstall}"
         echo "       runet-fix test [--json]"
         exit 1
         ;;

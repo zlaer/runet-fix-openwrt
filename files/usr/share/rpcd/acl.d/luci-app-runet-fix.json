@@ -10,6 +10,7 @@
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/zapret-exclude.txt": [ "read" ],
 				"/tmp/runet-fix-adblock.count": [ "read" ],
+				"/tmp/runet-fix-test.json": [ "read", "stat" ],
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read", "stat" ],
 				"/usr/bin/runet-fix": [ "exec" ],
 				"/usr/share/runet-fix/scripts/*": [ "exec" ],
