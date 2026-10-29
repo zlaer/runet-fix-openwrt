@@ -97,6 +97,7 @@ fi
 echo "${YELLOW}[5/5] Activating services and configuring permissions...${NC}"
 chmod +x /usr/bin/runet-fix
 chmod +x /usr/share/runet-fix/scripts/*
+chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py 2>/dev/null || true
 chmod +x /etc/init.d/runet-fix
 
 # Run uci-defaults to refresh LuCI cache

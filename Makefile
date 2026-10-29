@@ -72,6 +72,11 @@ define Package/runet-fix/install
 
 	$(INSTALL_DIR) $(1)/usr/share/runet-fix/lists
 	$(INSTALL_DATA) ./files/usr/share/runet-fix/lists/* $(1)/usr/share/runet-fix/lists/
+
+	# Install Python Telegram WS Proxy
+	$(INSTALL_DIR) $(1)/usr/share/runet-fix/tg_ws_proxy
+	$(INSTALL_DATA) ./files/usr/share/runet-fix/tg_ws_proxy/* $(1)/usr/share/runet-fix/tg_ws_proxy/
+	$(INSTALL_BIN) ./files/usr/share/runet-fix/tg_ws_proxy/main.py $(1)/usr/share/runet-fix/tg_ws_proxy/main.py
 endef
 
 define Package/luci-app-runet-fix/install

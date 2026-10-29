@@ -8,7 +8,7 @@ STOP=10
 
 FIREWALL_SCRIPT="/usr/share/runet-fix/scripts/runet-fix-firewall.sh"
 ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
-TG_PY_SCRIPT="/usr/share/runet-fix/scripts/tg_ws_transparent.py"
+TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
 TG_C_BIN="/usr/bin/tg-transproxy"
 
 find_nfqws() {
@@ -177,6 +177,7 @@ start_service() {
         local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
         local tg_engine=$(uci -q get runet-fix.telegram.engine || echo "auto")
         local tg_secret=$(uci -q get runet-fix.telegram.secret || echo "")
+        local tg_pool_size=$(uci -q get runet-fix.telegram.pool_size || echo "0")
         local custom_domains=$(uci -q get runet-fix.telegram.custom_domains || echo "")
         local custom_workers=$(uci -q get runet-fix.telegram.custom_workers || echo "")
 
@@ -194,7 +195,7 @@ start_service() {
             procd_set_param command "$TG_C_BIN" -p "$tg_port"
         else
             echo "[runet-fix] Launching Python Telegram WebSocket proxy on port $tg_port..."
-            procd_set_param command python3 "$TG_PY_SCRIPT" -p "$tg_port"
+            procd_set_param command python3 -u "$TG_PY_SCRIPT" -p "$tg_port" --pool-size "$tg_pool_size"
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
             [ -n "$custom_domains" ] && procd_append_param command -d "$custom_domains"
             [ -n "$custom_workers" ] && procd_append_param command -w "$custom_workers"
@@ -280,6 +281,7 @@ status_all() {
     fi
 
     local tg_pid=$(pidof tg-transproxy 2>/dev/null)
+    [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_proxy" 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_transparent.py" 2>/dev/null)
     if [ -n "$tg_pid" ]; then
         echo "Telegram Transparent Proxy: RUNNING (PID $tg_pid)"
