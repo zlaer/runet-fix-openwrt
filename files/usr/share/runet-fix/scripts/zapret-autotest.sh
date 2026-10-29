@@ -5,6 +5,7 @@
 QNUM_TEST=205
 TEST_CHAIN="zapret_test_out"
 RESULTS_FILE="/tmp/zapret-autotest-results.json"
+STATUS_FILE="/tmp/zapret-autotest-status.json"
 TARGET_YT="https://www.youtube.com"
 TARGET_DC="https://gateway.discord.gg"
 
@@ -12,6 +13,11 @@ TARGET_DC="https://gateway.discord.gg"
 cleanup() {
     [ -n "$TEST_PID" ] && kill -9 "$TEST_PID" 2>/dev/null
     nft delete chain inet runet_fix "$TEST_CHAIN" 2>/dev/null || true
+    if [ -f "$STATUS_FILE" ]; then
+        if grep -q '"running": true' "$STATUS_FILE" 2>/dev/null; then
+            echo '{"running": false, "error": "Interrupted", "progress": 0}' > "$STATUS_FILE"
+        fi
+    fi
     wait 2>/dev/null
 }
 trap cleanup EXIT INT TERM
@@ -45,10 +51,12 @@ if [ "$1" = "--apply-preset" ] && [ -n "$2" ]; then
 fi
 
 if [ "$1" = "--status" ]; then
-    if [ -f "$RESULTS_FILE" ]; then
+    if [ -f "$STATUS_FILE" ]; then
+        cat "$STATUS_FILE"
+    elif [ -f "$RESULTS_FILE" ]; then
         cat "$RESULTS_FILE"
     else
-        echo '{"status": "no_results"}'
+        echo '{"running": false, "status": "no_results"}'
     fi
     exit 0
 fi
@@ -84,15 +92,49 @@ BEST_PRESET=""
 BEST_SCORE=-999999
 JSON_RESULTS=""
 FIRST=1
+TOTAL_STRAT=$(printf "%s\n" "$STRATEGIES" | grep -c '|')
+
+# Initialize status file
+cat <<EOF > "$STATUS_FILE"
+{
+    "running": true,
+    "step": 0,
+    "total": $TOTAL_STRAT,
+    "current_id": "",
+    "current_name": "Инициализация тестового фаервола...",
+    "current_args": "",
+    "progress": 0,
+    "results": []
+}
+EOF
 
 OLD_IFS="$IFS"
 IFS='
 '
 for line in $STRATEGIES; do
     [ -z "$line" ] && continue
+    step=$((step + 1))
     strat_id=$(echo "$line" | cut -d'|' -f1)
     strat_name=$(echo "$line" | cut -d'|' -f2)
     strat_args=$(echo "$line" | cut -d'|' -f3)
+
+    pct=$(( (step - 1) * 100 / TOTAL_STRAT ))
+
+    cat <<EOF > "$STATUS_FILE"
+{
+    "running": true,
+    "step": $step,
+    "total": $TOTAL_STRAT,
+    "current_id": "$strat_id",
+    "current_name": "$strat_name",
+    "current_args": "$strat_args",
+    "progress": $pct,
+    "best_preset": "$BEST_PRESET",
+    "results": [
+        $JSON_RESULTS
+    ]
+}
+EOF
 
     if [ "$OUTPUT_JSON" = "0" ]; then
         printf "%-26s ... " "$strat_name"
@@ -165,12 +207,29 @@ for line in $STRATEGIES; do
 }
 EOF
 )
+    pct_done=$(( step * 100 / TOTAL_STRAT ))
     if [ "$FIRST" = "1" ]; then
         JSON_RESULTS="$entry"
         FIRST=0
     else
         JSON_RESULTS="$JSON_RESULTS, $entry"
     fi
+
+    cat <<EOF > "$STATUS_FILE"
+{
+    "running": true,
+    "step": $step,
+    "total": $TOTAL_STRAT,
+    "current_id": "$strat_id",
+    "current_name": "$strat_name",
+    "current_args": "$strat_args",
+    "progress": $pct_done,
+    "best_preset": "$BEST_PRESET",
+    "results": [
+        $JSON_RESULTS
+    ]
+}
+EOF
 done
 IFS="$OLD_IFS"
 
@@ -181,8 +240,12 @@ TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 # Generate final JSON payload
 FINAL_JSON=$(cat <<EOF
 {
+    "running": false,
     "timestamp": "$TIMESTAMP",
     "best_preset": "$BEST_PRESET",
+    "step": $TOTAL_STRAT,
+    "total": $TOTAL_STRAT,
+    "progress": 100,
     "results": [
         $JSON_RESULTS
     ]
@@ -191,6 +254,7 @@ EOF
 )
 
 echo "$FINAL_JSON" > "$RESULTS_FILE"
+echo "$FINAL_JSON" > "$STATUS_FILE"
 
 if [ "$OUTPUT_JSON" = "1" ]; then
     echo "$FINAL_JSON"
