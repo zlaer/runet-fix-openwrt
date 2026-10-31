@@ -278,7 +278,7 @@ impl RawWebSocket {
             let mask = if is_masked {
                 let mut m = [0u8; 4];
                 m.copy_from_slice(&self.read_buf[offset..offset + 4]);
-                offset += 4;
+                let _ = offset;
                 Some(m)
             } else {
                 None

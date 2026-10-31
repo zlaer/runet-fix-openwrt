@@ -20,17 +20,34 @@ use crate::orig_dst::{dc_from_ip, get_original_dst};
 use crate::pool::WsConnectionPool;
 use crate::ws::RawWebSocket;
 
+struct SimpleLogger {
+    level: log::LevelFilter,
+}
+
+impl log::Log for SimpleLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= self.level
+    }
+
+    fn log(&self, record: &log::Record) {
+        if self.enabled(record.metadata()) {
+            eprintln!("[{}] {}", record.level(), record.args());
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 fn init_logging(level: &str) {
-    let mut builder = env_logger::Builder::new();
     let filter = match level.to_lowercase().as_str() {
         "debug" => log::LevelFilter::Debug,
         "warn" => log::LevelFilter::Warn,
         "error" => log::LevelFilter::Error,
         _ => log::LevelFilter::Info,
     };
-    builder.filter_level(filter);
-    builder.format_timestamp_secs();
-    builder.init();
+    let logger = SimpleLogger { level: filter };
+    let _ = log::set_boxed_logger(Box::new(logger));
+    log::set_max_level(filter);
 }
 
 fn main() -> io::Result<()> {

@@ -133,10 +133,12 @@ pub fn generate_relay_init(
         break;
     }
 
-    let enc_key = &rnd[SKIP_LEN..SKIP_LEN + PREKEY_LEN];
-    let enc_iv = &rnd[SKIP_LEN + PREKEY_LEN..SKIP_LEN + PREKEY_LEN + IV_LEN];
+    let mut enc_key = [0u8; PREKEY_LEN];
+    enc_key.copy_from_slice(&rnd[SKIP_LEN..SKIP_LEN + PREKEY_LEN]);
+    let mut enc_iv = [0u8; IV_LEN];
+    enc_iv.copy_from_slice(&rnd[SKIP_LEN + PREKEY_LEN..SKIP_LEN + PREKEY_LEN + IV_LEN]);
 
-    let mut encryptor = AesCtr::new(enc_key.into(), enc_iv.into());
+    let mut encryptor = AesCtr::new(&enc_key.into(), &enc_iv.into());
 
     // Build plain tail (8 bytes): proto_tag (4) + dc_idx (2) + random padding (2)
     let mut tail_plain = [0u8; 8];
@@ -161,11 +163,13 @@ pub fn generate_relay_init(
     dec_prekey_iv.copy_from_slice(&rnd[SKIP_LEN..SKIP_LEN + PREKEY_LEN + IV_LEN]);
     dec_prekey_iv.reverse();
 
-    let dec_key = &dec_prekey_iv[0..32];
-    let dec_iv = &dec_prekey_iv[32..48];
+    let mut dec_key = [0u8; 32];
+    dec_key.copy_from_slice(&dec_prekey_iv[0..32]);
+    let mut dec_iv = [0u8; 16];
+    dec_iv.copy_from_slice(&dec_prekey_iv[32..48]);
 
-    let mut tg_enc = AesCtr::new(enc_key.into(), enc_iv.into());
-    let tg_dec = AesCtr::new(dec_key.into(), dec_iv.into());
+    let mut tg_enc = AesCtr::new(&enc_key.into(), &enc_iv.into());
+    let tg_dec = AesCtr::new(&dec_key.into(), &dec_iv.into());
 
     // Advance tg_enc past the 64-byte handshake
     let mut discard = [0u8; 64];
