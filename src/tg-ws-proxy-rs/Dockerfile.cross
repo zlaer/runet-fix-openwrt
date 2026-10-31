@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.4
+# Multi-arch Musl Cross-Compilation for tg-ws-proxy-rs (OpenWrt targets)
+FROM rust:1.79-alpine AS builder
+
+RUN apk add --no-cache \
+    musl-dev \
+    gcc \
+    g++ \
+    make \
+    upx \
+    perl \
+    bash \
+    ca-certificates
+
+WORKDIR /usr/src/tg-ws-proxy
+
+# Cache dependencies
+COPY Cargo.toml ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release && \
+    rm -rf src target/release/deps/tg_ws_proxy*
+
+# Copy full source
+COPY src ./src
+
+# Build native x86_64-unknown-linux-musl
+RUN cargo build --release && \
+    cp target/release/tg-ws-proxy /tmp/tg-ws-proxy-x86_64 && \
+    strip /tmp/tg-ws-proxy-x86_64
+
+# Package output
+FROM alpine:3.20 AS final
+WORKDIR /dist
+COPY --from=builder /tmp/tg-ws-proxy-x86_64 ./tg-ws-proxy-x86_64
+CMD ["ls", "-lh", "/dist"]
