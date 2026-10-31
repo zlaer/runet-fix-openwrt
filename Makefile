@@ -49,10 +49,11 @@ define Build/Compile
 endef
 
 define Package/runet-fix/install
-	# Install compiled native C binary
+	# Install binaries
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tg-transproxy $(1)/usr/bin/tg-transproxy
 	$(INSTALL_BIN) ./files/usr/bin/runet-fix $(1)/usr/bin/runet-fix
+	[ -f ./files/usr/bin/tg-ws-proxy ] && $(INSTALL_BIN) ./files/usr/bin/tg-ws-proxy $(1)/usr/bin/tg-ws-proxy || true
 
 	# Install init.d service
 	$(INSTALL_DIR) $(1)/etc/init.d
