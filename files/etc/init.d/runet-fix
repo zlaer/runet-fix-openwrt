@@ -8,6 +8,7 @@ STOP=10
 
 FIREWALL_SCRIPT="/usr/share/runet-fix/scripts/runet-fix-firewall.sh"
 ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
+TG_RUST_BIN="/usr/bin/tg-ws-proxy"
 TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
 TG_C_BIN="/usr/bin/tg-transproxy"
 
@@ -218,16 +219,32 @@ start_service() {
         local custom_domains=$(uci -q get runet-fix.telegram.custom_domains || echo "")
         local custom_workers=$(uci -q get runet-fix.telegram.custom_workers || echo "")
 
-        # Prefer native C binary for extreme low memory/flash, fallback to Python
-        local use_c_bin=0
-        if [ "$tg_engine" = "c_native" ] && [ -x "$TG_C_BIN" ]; then
-            use_c_bin=1
-        elif [ "$tg_engine" = "auto" ] && [ -x "$TG_C_BIN" ]; then
-            use_c_bin=1
+        # Select Telegram Proxy Engine:
+        # 1. Native Rust binary (tg-ws-proxy-rs) - fastest, <2.5MB RAM, no Python dependency
+        # 2. Native C binary (tg-transproxy)
+        # 3. Python 3 asyncio daemon (fallback)
+        local engine_type="python"
+        if [ "$tg_engine" = "rust" ] && [ -x "$TG_RUST_BIN" ]; then
+            engine_type="rust"
+        elif [ "$tg_engine" = "c_native" ] && [ -x "$TG_C_BIN" ]; then
+            engine_type="c_native"
+        elif [ "$tg_engine" = "auto" ]; then
+            if [ -x "$TG_RUST_BIN" ]; then
+                engine_type="rust"
+            elif [ -x "$TG_C_BIN" ]; then
+                engine_type="c_native"
+            else
+                engine_type="python"
+            fi
         fi
 
         procd_open_instance "telegram"
-        if [ "$use_c_bin" = "1" ]; then
+        if [ "$engine_type" = "rust" ]; then
+            echo "[runet-fix] Launching native Rust Telegram WebSocket proxy on port $tg_port..."
+            procd_set_param command "$TG_RUST_BIN" -p "$tg_port" -l "0.0.0.0" --pool-size "$tg_pool_size"
+            [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
+            [ -n "$custom_domains" ] && procd_append_param command --domains "$custom_domains"
+        elif [ "$engine_type" = "c_native" ]; then
             echo "[runet-fix] Launching native C Telegram transparent proxy on port $tg_port..."
             procd_set_param command "$TG_C_BIN" -p "$tg_port"
         else
@@ -243,7 +260,7 @@ start_service() {
         procd_close_instance
     else
         echo "[runet-fix] Telegram proxy is disabled in config."
-        killall tg-transproxy >/dev/null 2>&1 || true
+        killall tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
         pkill -f tg_ws_proxy >/dev/null 2>&1 || true
         pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     fi
@@ -294,7 +311,7 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    killall -TERM nfqws nfqws2 tg-transproxy >/dev/null 2>&1 || true
+    killall -TERM nfqws nfqws2 tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
     pkill -f tg_ws_proxy >/dev/null 2>&1 || true
     pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     local i=0
