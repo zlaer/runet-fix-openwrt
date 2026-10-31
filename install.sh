@@ -89,7 +89,7 @@ else
     rm -rf "$TMP_INSTALL"
 fi
 
-echo "${YELLOW}[4/5] Checking for Zapret nfqws binary...${NC}"
+echo "${YELLOW}[4/5] Checking for Zapret nfqws and Telegram proxy binaries...${NC}"
 if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
     echo "${YELLOW}Zapret binary not found. Installing standalone zapret...${NC}"
     mkdir -p /opt/zapret/nfq
@@ -113,6 +113,45 @@ if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
             ;;
     esac
     chmod +x /opt/zapret/nfq/nfqws 2>/dev/null || true
+fi
+
+# Multi-arch Telegram native proxy setup
+TG_BIN_URL="https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/master/prebuilt"
+TG_ARCH=""
+case "$ARCH" in
+    aarch64*|arm64)
+        TG_ARCH="aarch64"
+        ;;
+    arm_cortex*|armhf|armv7*)
+        TG_ARCH="armv7"
+        ;;
+    x86_64|amd64)
+        TG_ARCH="x86_64"
+        ;;
+esac
+
+if [ -n "$TG_ARCH" ]; then
+    if [ -f "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" ]; then
+        echo "Installing native tg-ws-proxy-$TG_ARCH from local repo..."
+        cp "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/tg-ws-proxy
+    elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" ]; then
+        echo "Installing native tg-ws-proxy-$TG_ARCH from package archive..."
+        cp "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/tg-ws-proxy
+    else
+        echo "Downloading native tg-ws-proxy for $TG_ARCH..."
+        curl -s -L -k "$TG_BIN_URL/tg-ws-proxy-$TG_ARCH" -o /usr/bin/tg-ws-proxy || true
+    fi
+    chmod +x /usr/bin/tg-ws-proxy 2>/dev/null || true
+fi
+
+# Verify binary runs on this hardware; if not, remove so system falls back gracefully to Python 3
+if [ -f /usr/bin/tg-ws-proxy ]; then
+    if /usr/bin/tg-ws-proxy --help >/dev/null 2>&1; then
+        echo "${GREEN}Native Rust Telegram proxy (tg-ws-proxy) verified successfully (<2.5MB RAM).${NC}"
+    else
+        echo "${YELLOW}Native tg-ws-proxy is not compatible with this CPU architecture, falling back to Python 3.${NC}"
+        rm -f /usr/bin/tg-ws-proxy
+    fi
 fi
 
 echo "${YELLOW}[5/5] Activating services and configuring permissions...${NC}"

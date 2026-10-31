@@ -12,6 +12,10 @@ TG_RUST_BIN="/usr/bin/tg-ws-proxy"
 TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
 TG_C_BIN="/usr/bin/tg-transproxy"
 
+check_binary() {
+    [ -x "$1" ] && "$1" --help >/dev/null 2>&1
+}
+
 find_nfqws() {
     for b in /usr/bin/nfqws2 /opt/zapret2/nfq2/nfqws2 /usr/bin/nfqws /opt/zapret/nfq/nfqws; do
         if [ -x "$b" ]; then
@@ -224,14 +228,14 @@ start_service() {
         # 2. Native C binary (tg-transproxy)
         # 3. Python 3 asyncio daemon (fallback)
         local engine_type="python"
-        if [ "$tg_engine" = "rust" ] && [ -x "$TG_RUST_BIN" ]; then
+        if [ "$tg_engine" = "rust" ] && check_binary "$TG_RUST_BIN"; then
             engine_type="rust"
-        elif [ "$tg_engine" = "c_native" ] && [ -x "$TG_C_BIN" ]; then
+        elif [ "$tg_engine" = "c_native" ] && check_binary "$TG_C_BIN"; then
             engine_type="c_native"
         elif [ "$tg_engine" = "auto" ]; then
-            if [ -x "$TG_RUST_BIN" ]; then
+            if check_binary "$TG_RUST_BIN"; then
                 engine_type="rust"
-            elif [ -x "$TG_C_BIN" ]; then
+            elif check_binary "$TG_C_BIN"; then
                 engine_type="c_native"
             else
                 engine_type="python"
