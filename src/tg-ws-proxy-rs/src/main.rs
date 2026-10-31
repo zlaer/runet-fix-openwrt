@@ -20,13 +20,13 @@ use crate::orig_dst::{dc_from_ip, get_original_dst};
 use crate::pool::WsConnectionPool;
 use crate::ws::RawWebSocket;
 
-struct SimpleLogger {
-    level: log::LevelFilter,
-}
+struct SimpleLogger;
+
+static LOGGER: SimpleLogger = SimpleLogger;
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
-        metadata.level() <= self.level
+        metadata.level() <= log::max_level()
     }
 
     fn log(&self, record: &log::Record) {
@@ -45,8 +45,7 @@ fn init_logging(level: &str) {
         "error" => log::LevelFilter::Error,
         _ => log::LevelFilter::Info,
     };
-    let logger = SimpleLogger { level: filter };
-    let _ = log::set_boxed_logger(Box::new(logger));
+    let _ = log::set_logger(&LOGGER);
     log::set_max_level(filter);
 }
 
