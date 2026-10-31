@@ -109,34 +109,35 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
 
             // 3. Try transparent mode handshake first (direct client connection),
             // then fallback to configured MTProxy secret
-            let handshake_res = parse_client_handshake(&handshake_buf, None).or_else(|| {
-                secret_ref
-                    .as_ref()
-                    .and_then(|s| parse_client_handshake(&handshake_buf, Some(s)))
-            });
-
-            let parsed = match handshake_res {
-                Some(p) => p,
-                None => {
-                    log::warn!(
-                        "[{}] Invalid MTProto handshake from client (protocol mismatch)",
-                        label
-                    );
-                    return;
-                }
+            let (parsed, secret_used) = match parse_client_handshake(&handshake_buf, None) {
+                Some(p) => (p, None),
+                None => match secret_ref.as_ref().and_then(|s| parse_client_handshake(&handshake_buf, Some(s))) {
+                    Some(p) => (p, secret_ref.as_deref()),
+                    None => {
+                        log::warn!(
+                            "[{}] Invalid MTProto handshake from client (protocol mismatch)",
+                            label
+                        );
+                        return;
+                    }
+                },
             };
 
             // Derive target DC ID from original IP if available, otherwise from decrypted header
-            let dc_id = orig_dst
+            let mut dc_id = orig_dst
                 .map(|d| dc_from_ip(*d.ip()))
                 .unwrap_or(parsed.dc_id);
+            if dc_id == 0 {
+                dc_id = 2;
+            }
 
             log::info!(
-                "[{}] Telegram session for DC{} (proto=0x{:08X}, media={})",
+                "[{}] Telegram session for DC{} (proto=0x{:08X}, media={}, transparent={})",
                 label,
                 dc_id,
                 parsed.proto_tag,
-                parsed.is_media
+                parsed.is_media,
+                secret_used.is_none()
             );
 
             // Upstream WebSocket relay always expects INTERMEDIATE framing
@@ -172,10 +173,9 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             }
 
             // 6. Build complete cryptographic context
-            let secret_slice = secret_ref.as_ref().map(|s| s.as_slice());
             let ctx = build_crypto_context(
                 &parsed.client_dec_prekey_iv,
-                secret_slice,
+                secret_used,
                 tg_enc,
                 tg_dec,
             );
