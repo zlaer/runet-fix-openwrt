@@ -420,6 +420,20 @@ return view.extend({
 
 		s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
 
+		// Version & Update Management Row
+		var v_ctrl = s.option(form.DummyValue, '_version_control', t.version_row_name);
+		v_ctrl.rawhtml = true;
+		v_ctrl.cfgvalue = function() {
+			return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:4px 0;">' +
+				'  <span class="badge" style="background:#007bff;color:#fff;padding:4px 10px;border-radius:4px;font-weight:bold;font-size:13px;">v' + currentVersion + '</span>' +
+				'  <span id="rf-update-status" style="font-size:13px;color:#888;"></span>' +
+				'  <div style="display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap;">' +
+				'    <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
+				'    <button type="button" class="btn cbi-button-save" id="btn-do-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixPerformUpdate()">' + t.btn_update + '</button>' +
+				'  </div>' +
+				'</div>';
+		};
+
 		// Status Overview Table with Version & Actions
 		var o = s.option(form.DummyValue, '_status_table', t.status_table);
 		o.rawhtml = true;
