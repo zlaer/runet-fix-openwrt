@@ -21,8 +21,30 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-# Detect architecture
-ARCH=$(opkg print-architecture | awk 'NR==1{print $2}' 2>/dev/null || uname -m)
+# Package manager abstraction (supports OpenWrt opkg and modern OpenWrt apk)
+pkg_update() {
+    if command -v apk >/dev/null 2>&1; then
+        apk update || true
+    elif command -v opkg >/dev/null 2>&1; then
+        opkg update || true
+    fi
+}
+
+pkg_install() {
+    if command -v apk >/dev/null 2>&1; then
+        apk add "$@" || true
+    elif command -v opkg >/dev/null 2>&1; then
+        opkg install "$@" || true
+    fi
+}
+
+# Detect architecture reliably across all OpenWrt releases
+ARCH=""
+if [ -f /etc/openwrt_release ]; then
+    . /etc/openwrt_release
+    ARCH="$DISTRIB_ARCH"
+fi
+[ -z "$ARCH" ] && ARCH=$(uname -m 2>/dev/null || echo "unknown")
 echo "${YELLOW}Detected architecture: $ARCH${NC}"
 
 # Check firewall version
@@ -34,16 +56,16 @@ else
     FW_PKGS="iptables-mod-nfqueue kmod-ipt-nfqueue"
 fi
 
-echo "${YELLOW}[1/5] Updating opkg package lists...${NC}"
-opkg update || true
+echo "${YELLOW}[1/5] Updating package manager lists...${NC}"
+pkg_update
 
 echo "${YELLOW}[2/5] Installing prerequisite kernel modules and tools...${NC}"
-opkg install ipset curl ca-bundle $FW_PKGS || true
+pkg_install ipset curl ca-bundle $FW_PKGS
 
 # Optional python or native binary support
-if ! command -v python3 >/dev/null 2>&1 && [ ! -f /usr/bin/tg-transproxy ]; then
-    echo "${YELLOW}Installing lightweight Python 3 for Telegram WS proxy...${NC}"
-    opkg install python3-base python3-asyncio python3-ssl || true
+if ! command -v python3 >/dev/null 2>&1 && [ ! -f /usr/bin/tg-transproxy ] && [ ! -f /usr/bin/tg-ws-proxy ]; then
+    echo "${YELLOW}Installing lightweight Python 3 for Telegram WS proxy fallback...${NC}"
+    pkg_install python3-base python3-asyncio python3-ssl
 fi
 
 echo "${YELLOW}[3/5] Setting up directory structure...${NC}"
