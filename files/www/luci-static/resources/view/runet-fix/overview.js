@@ -31,6 +31,17 @@ var I18N = {
 		stopped: 'ОСТАНОВЛЕН',
 		inactive: 'НЕАКТИВЕН',
 		domains: 'доменов',
+		version_label: 'Версия:',
+		btn_check_update: 'Проверить обновления',
+		checking_update: 'Сверка с GitHub...',
+		up_to_date: 'Установлена последняя версия',
+		update_available: 'Доступно обновление',
+		btn_update_now: 'Обновить до',
+		btn_force_update: 'Обновить Runet-Fix',
+		updating_title: 'Обновление Runet-Fix',
+		updating_desc: 'Загрузка свежего релиза с GitHub, обновление бинарных файлов, скриптов и перезапуск сервисов...',
+		update_done: 'Обновление успешно установлено! Перезагрузка страницы...',
+		update_err: 'Ошибка при обновлении: ',
 		diag_section: 'Диагностика доступности сервисов (RuNet Health Probe)',
 		diag_title: 'Проверка сетевых сервисов в реальном времени',
 		diag_desc: 'Мгновенная проверка (1–2 сек): доступность YouTube 4K, Discord Gateway, Telegram туннеля и блокировки рекламы.',
@@ -85,6 +96,17 @@ var I18N = {
 		stopped: 'STOPPED',
 		inactive: 'INACTIVE',
 		domains: 'domains',
+		version_label: 'Version:',
+		btn_check_update: 'Check for Updates',
+		checking_update: 'Checking GitHub...',
+		up_to_date: 'Latest version installed',
+		update_available: 'Update available',
+		btn_update_now: 'Update to',
+		btn_force_update: 'Update Runet-Fix',
+		updating_title: 'Updating Runet-Fix',
+		updating_desc: 'Downloading latest release from GitHub, updating files and restarting services...',
+		update_done: 'Update installed successfully! Reloading page...',
+		update_err: 'Update error: ',
 		diag_section: 'Service Availability Diagnostics (RuNet Health Probe)',
 		diag_title: 'Real-Time Network Health Probe',
 		diag_desc: 'Instant verification (1–2 sec): YouTube 4K, Discord Gateway, Telegram tunnel, and adblock status.',
@@ -133,7 +155,10 @@ return view.extend({
 				return fs.stat('/tmp/dnsmasq.d/runet-fix-adblock.conf').then(function(stat) {
 					return (stat && stat.size > 0) ? Math.round(stat.size / 30) : 0;
 				}).catch(function() { return 0; });
-			})
+			}),
+			fs.read('/usr/share/runet-fix/version').then(function(res) {
+				return (res || '').trim() || '1.1.0';
+			}).catch(function() { return '1.1.0'; })
 		]);
 	},
 
@@ -162,11 +187,73 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
+		var currentVersion = data[2] || '1.1.0';
 
 		// Attach global window handlers with closures to fs and translations
 		window.setRunetFixLang = function(lang) {
 			localStorage.setItem('runet_fix_lang', lang);
 			location.reload();
+		};
+
+		window.runetFixCheckUpdate = function() {
+			var statusEl = document.getElementById('rf-update-status');
+			var btnContainer = document.getElementById('rf-update-btn-container');
+			if (statusEl) statusEl.innerHTML = '<span style="color:#ffc107;">' + t.checking_update + '</span>';
+
+			fs.exec('/usr/bin/runet-fix', ['check-update', '--json']).then(function(res) {
+				var stdout = (res && res.stdout) ? res.stdout.trim() : '';
+				var parsed = null;
+				try { parsed = JSON.parse(stdout); } catch(e) {}
+
+				if (parsed && parsed.status === 'ok') {
+					if (parsed.update_available) {
+						if (statusEl) {
+							statusEl.innerHTML = '<span class="badge" style="background:#28a745;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold;">' + 
+								t.update_available + ': v' + parsed.latest_version + '</span>';
+						}
+						if (btnContainer) {
+							btnContainer.innerHTML = '<button type="button" class="btn cbi-button-positive" style="padding:4px 12px;font-weight:bold;" onclick="window.runetFixPerformUpdate(\'' + parsed.latest_version + '\')">' + 
+								t.btn_update_now + ' v' + parsed.latest_version + '</button>';
+						}
+					} else {
+						if (statusEl) {
+							statusEl.innerHTML = '<span style="color:#aaa;">' + t.up_to_date + ' (v' + parsed.current_version + ')</span>';
+						}
+						if (btnContainer) {
+							btnContainer.innerHTML = '<button type="button" class="btn cbi-button-neutral" style="padding:4px 10px;font-size:12px;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>';
+						}
+					}
+				} else {
+					var err = (parsed && parsed.message) ? parsed.message : t.resp_err;
+					if (statusEl) statusEl.innerHTML = '<span style="color:#dc3545;">' + err + '</span>';
+					if (btnContainer) {
+						btnContainer.innerHTML = '<button type="button" class="btn cbi-button-neutral" style="padding:4px 10px;font-size:12px;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>';
+					}
+				}
+			}).catch(function(err) {
+				if (statusEl) statusEl.innerHTML = '<span style="color:#dc3545;">' + (err.message || err) + '</span>';
+			});
+		};
+
+		window.runetFixPerformUpdate = function(ver) {
+			if (!confirm((curLang === 'ru' ? 'Выполнить обновление Runet-Fix до версии v' : 'Update Runet-Fix to version v') + (ver || '') + '?')) {
+				return;
+			}
+			ui.showModal(t.updating_title, [
+				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, t.updating_desc),
+				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
+			]);
+
+			fs.exec('/usr/bin/runet-fix', ['update']).then(function(res) {
+				ui.hideModal();
+				ui.addNotification(null, E('p', t.update_done), 'info');
+				setTimeout(function() {
+					location.reload();
+				}, 2500);
+			}).catch(function(err) {
+				ui.hideModal();
+				ui.addNotification(null, E('p', t.update_err + (err.message || err)), 'error');
+			});
 		};
 
 		window.runRuNetHealthProbe = function() {
@@ -321,6 +408,22 @@ return view.extend({
 
 		s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
 
+		// Version & GitHub Update Bar
+		var ver_bar = s.option(form.DummyValue, '_version_bar');
+		ver_bar.rawhtml = true;
+		ver_bar.cfgvalue = function() {
+			return '<div style="display:flex;align-items:center;justify-content:space-between;background:#23272e;border:1px solid #3e4451;padding:10px 14px;border-radius:6px;margin:12px 0;flex-wrap:wrap;gap:10px;">' +
+				'<div style="display:flex;align-items:center;gap:10px;">' +
+				'  <span style="font-weight:bold;color:#fff;">' + t.version_label + '</span>' +
+				'  <span class="badge" style="background:#007bff;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold;font-size:13px;">v' + currentVersion + '</span>' +
+				'  <span id="rf-update-status" style="font-size:13px;color:#bbb;margin-left:6px;"></span>' +
+				'</div>' +
+				'<div id="rf-update-btn-container" style="margin-left:auto;">' +
+				'  <button type="button" class="btn cbi-button-action" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
+				'</div>' +
+				'</div>';
+		};
+
 		// Status Overview Table
 		var o = s.option(form.DummyValue, '_status_table', t.status_table);
 		o.rawhtml = true;
@@ -389,7 +492,8 @@ return view.extend({
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + t.btn_zapret_settings + '</a> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
-				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
+				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button> ' +
+				'<button type="button" class="btn cbi-button-action" id="btn-check-upd" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
 				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
 				'<span style="font-size:13px;color:#888;font-weight:bold;">' + t.lang_label + '</span>' +
 				'<div class="btn-group" style="display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;">' +

@@ -2,6 +2,16 @@
 # /usr/bin/runet-fix - Unified CLI management tool for runet-fix
 # Part of the runet-fix all-in-one suite.
 
+VERSION_FILE="/usr/share/runet-fix/version"
+CURRENT_VERSION="1.1.0"
+[ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
+
+REPO_USER="zlaer"
+REPO_NAME="runet-fix-openwrt"
+REPO_BRANCH="master"
+GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
+GITHUB_API="https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest"
+
 case "$1" in
     start)
         /etc/init.d/runet-fix start
@@ -14,6 +24,126 @@ case "$1" in
         ;;
     status)
         /etc/init.d/runet-fix status_all
+        ;;
+    version)
+        if [ "$2" = "--json" ]; then
+            echo "{\"version\": \"$CURRENT_VERSION\"}"
+        else
+            echo "$CURRENT_VERSION"
+        fi
+        ;;
+    check-update|check_update)
+        latest=$(curl -s -k -m 5 "$GITHUB_RAW/version" 2>/dev/null | tr -d '\r\n ')
+        if [ -z "$latest" ]; then
+            latest=$(curl -s -k -m 5 "$GITHUB_API" 2>/dev/null | grep '"tag_name":' | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d 'v\r\n ')
+        fi
+
+        if [ -z "$latest" ]; then
+            if [ "$2" = "--json" ]; then
+                echo "{\"status\": \"error\", \"current_version\": \"$CURRENT_VERSION\", \"message\": \"Failed to reach GitHub\"}"
+            else
+                echo "Error: Could not check for updates (GitHub unreachable or repository offline)."
+            fi
+            exit 1
+        fi
+
+        clean_curr=$(echo "$CURRENT_VERSION" | sed 's/^v//')
+        clean_lat=$(echo "$latest" | sed 's/^v//')
+        update_avail=0
+        if [ "$clean_curr" != "$clean_lat" ]; then
+            update_avail=1
+        fi
+
+        out_json=$(cat <<EOF
+{
+  "status": "ok",
+  "current_version": "$CURRENT_VERSION",
+  "latest_version": "$latest",
+  "update_available": $update_avail,
+  "repo_url": "https://github.com/$REPO_USER/$REPO_NAME"
+}
+EOF
+)
+        echo "$out_json" > /tmp/runet-fix-update.json 2>/dev/null
+        if [ "$2" = "--json" ]; then
+            echo "$out_json"
+        else
+            if [ "$update_avail" = "1" ]; then
+                echo "Update available: $latest (current: $CURRENT_VERSION)"
+                echo "Run 'runet-fix update' to install the latest version."
+            else
+                echo "Runet-Fix is up to date (version $CURRENT_VERSION)."
+            fi
+        fi
+        ;;
+    update)
+        echo "=== [runet-fix] Starting Update from GitHub... ==="
+        echo "Repository: https://github.com/$REPO_USER/$REPO_NAME (branch: $REPO_BRANCH)"
+
+        TMP_DIR="/tmp/runet-fix-update"
+        rm -rf "$TMP_DIR"
+        mkdir -p "$TMP_DIR"
+
+        TARBALL_URL="https://github.com/$REPO_USER/$REPO_NAME/archive/refs/heads/$REPO_BRANCH.tar.gz"
+        echo "Downloading update archive..."
+        if ! curl -s -k -L -m 60 "$TARBALL_URL" -o "$TMP_DIR/update.tar.gz"; then
+            echo "Error: Failed to download update archive from GitHub!"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        echo "Extracting update archive..."
+        if ! tar -xzf "$TMP_DIR/update.tar.gz" -C "$TMP_DIR/"; then
+            echo "Error: Failed to unpack update archive!"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "$REPO_NAME-*" | head -n 1)
+        if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/files" ]; then
+            echo "Error: Invalid update package structure!"
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
+
+        echo "Backing up user configuration and custom lists..."
+        [ -f /etc/config/runet-fix ] && cp /etc/config/runet-fix "$TMP_DIR/runet-fix.config.bak"
+        [ -d /usr/share/runet-fix/lists ] && cp -r /usr/share/runet-fix/lists "$TMP_DIR/lists.bak"
+
+        echo "Installing updated files..."
+        cp -r "$SRC_DIR/files/usr/bin/"* /usr/bin/ 2>/dev/null || true
+        cp -r "$SRC_DIR/files/usr/share/runet-fix/"* /usr/share/runet-fix/ 2>/dev/null || true
+        cp -r "$SRC_DIR/files/usr/share/luci/menu.d/"* /usr/share/luci/menu.d/ 2>/dev/null || true
+        cp -r "$SRC_DIR/files/usr/share/rpcd/acl.d/"* /usr/share/rpcd/acl.d/ 2>/dev/null || true
+        cp -r "$SRC_DIR/files/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/ 2>/dev/null || true
+        cp -r "$SRC_DIR/files/etc/init.d/runet-fix" /etc/init.d/
+        [ -f "$SRC_DIR/version" ] && cp "$SRC_DIR/version" /usr/share/runet-fix/version
+
+        # Restore custom lists preserving user additions
+        if [ -d "$TMP_DIR/lists.bak" ]; then
+            for f in "$TMP_DIR/lists.bak"/*; do
+                [ -f "$f" ] && cp "$f" /usr/share/runet-fix/lists/
+            done
+        fi
+
+        echo "Setting file permissions..."
+        chmod +x /etc/init.d/runet-fix /usr/bin/runet-fix
+        chmod +x /usr/share/runet-fix/scripts/*.sh 2>/dev/null || true
+        chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py 2>/dev/null || true
+
+        echo "Clearing LuCI view and index cache..."
+        rm -f /tmp/luci-indexcache
+        killall -HUP rpcd 2>/dev/null || true
+
+        echo "Restarting runet-fix services..."
+        /etc/init.d/runet-fix restart
+
+        NEW_VER=$(cat /usr/share/runet-fix/version 2>/dev/null || echo "latest")
+        echo "=========================================================="
+        echo "Runet-Fix successfully updated to version $NEW_VER!"
+        echo "=========================================================="
+        rm -rf "$TMP_DIR"
+        exit 0
         ;;
     adblock|update-adblock)
         /usr/share/runet-fix/scripts/update-adblock.sh
@@ -88,8 +218,11 @@ EOF
         logread -e "runet-fix" -e "tg-ws-proxy" -e "nfqws" | tail -n 50
         ;;
     *)
-        echo "runet-fix CLI - All-in-One DPI Bypass, Telegram Fix & Adblock"
-        echo "Usage: runet-fix {start|stop|restart|status|update-adblock|firewall|test|log|uninstall}"
+        echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"
+        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|firewall|test|log|uninstall}"
+        echo "       runet-fix version [--json]"
+        echo "       runet-fix check-update [--json]"
+        echo "       runet-fix update"
         echo "       runet-fix test [--json]"
         exit 1
         ;;

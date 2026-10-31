@@ -65,7 +65,28 @@ if [ -d "$REPO_DIR/files" ]; then
     cp -r "$REPO_DIR/files/usr/share/rpcd/acl.d/"* /usr/share/rpcd/acl.d/
     cp -r "$REPO_DIR/files/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/
     cp -r "$REPO_DIR/files/etc/init.d/runet-fix" /etc/init.d/
+    [ -f "$REPO_DIR/version" ] && cp "$REPO_DIR/version" /usr/share/runet-fix/version
     [ -f /etc/config/runet-fix ] || cp "$REPO_DIR/files/etc/config/runet-fix" /etc/config/
+else
+    echo "${YELLOW}Downloading repository archive from GitHub (master branch)...${NC}"
+    TMP_INSTALL="/tmp/runet-fix-install"
+    rm -rf "$TMP_INSTALL"
+    mkdir -p "$TMP_INSTALL"
+    if curl -s -k -L "https://github.com/zlaer/runet-fix-openwrt/archive/refs/heads/master.tar.gz" -o "$TMP_INSTALL/master.tar.gz"; then
+        tar -xzf "$TMP_INSTALL/master.tar.gz" -C "$TMP_INSTALL/"
+        SRC=$(find "$TMP_INSTALL" -maxdepth 1 -type d -name "runet-fix-openwrt*" | head -n 1)
+        if [ -n "$SRC" ] && [ -d "$SRC/files" ]; then
+            cp -r "$SRC/files/usr/bin/"* /usr/bin/ 2>/dev/null || true
+            cp -r "$SRC/files/usr/share/runet-fix/"* /usr/share/runet-fix/
+            cp -r "$SRC/files/usr/share/luci/menu.d/"* /usr/share/luci/menu.d/
+            cp -r "$SRC/files/usr/share/rpcd/acl.d/"* /usr/share/rpcd/acl.d/
+            cp -r "$SRC/files/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/
+            cp -r "$SRC/files/etc/init.d/runet-fix" /etc/init.d/
+            [ -f "$SRC/version" ] && cp "$SRC/version" /usr/share/runet-fix/version
+            [ -f /etc/config/runet-fix ] || cp "$SRC/files/etc/config/runet-fix" /etc/config/
+        fi
+    fi
+    rm -rf "$TMP_INSTALL"
 fi
 
 echo "${YELLOW}[4/5] Checking for Zapret nfqws binary...${NC}"

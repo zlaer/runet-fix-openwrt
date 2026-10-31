@@ -324,7 +324,9 @@ update_adblock() {
 
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    echo "=== [runet-fix] All-in-One Status ==="
+    local ver="1.1.0"
+    [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
+    echo "=== [runet-fix v$ver] All-in-One Status ==="
     local nfq_pid=$(pidof nfqws nfqws2 2>/dev/null)
     if [ -n "$nfq_pid" ]; then
         echo "Zapret (nfqws): RUNNING (PID $nfq_pid)"
