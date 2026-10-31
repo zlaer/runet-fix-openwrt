@@ -3,6 +3,11 @@
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/badge/Release-v1.1.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt)
+[![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
+
+> [!NOTE]
+> **Проект разработан при помощи искусственного интеллекта (AI-Generated / AI-Assisted)**  
+> Данный проект, архитектура интеграции компонентов, веб-интерфейс LuCI, скрипты автоматизации и документация полностью созданы и сопровождаются с использованием технологий ИИ.
 
 **Runet-Fix** — это единый высокопроизводительный программный комплекс для роутеров под управлением **OpenWrt** (21.02, 22.03, 23.05, 24.x, 25.x+), объединяющий все необходимые инструменты для обхода блокировок и ускорения сети в Рунете:
 
