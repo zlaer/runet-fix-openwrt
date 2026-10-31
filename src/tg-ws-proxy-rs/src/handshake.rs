@@ -1,10 +1,10 @@
-use aes::Aes128;
+use aes::Aes256;
 use ctr::cipher::{KeyIvInit, StreamCipher};
 use ctr::Ctr128BE;
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 
-pub type Aes128Ctr = Ctr128BE<Aes128>;
+pub type AesCtr = Ctr128BE<Aes256>;
 
 pub const HANDSHAKE_LEN: usize = 64;
 pub const SKIP_LEN: usize = 8;
@@ -21,10 +21,10 @@ pub const PROTO_TAG_SECURE: u32 = 0xDDDDDDDD;
 /// - Client leg: communicates with LAN client (usually Abridged over TCP)
 /// - Telegram leg: communicates with upstream Cloudflare/Telegram WS (Intermediate)
 pub struct CryptoContext {
-    pub client_dec: Aes128Ctr,
-    pub client_enc: Aes128Ctr,
-    pub tg_enc: Aes128Ctr,
-    pub tg_dec: Aes128Ctr,
+    pub client_dec: AesCtr,
+    pub client_enc: AesCtr,
+    pub tg_enc: AesCtr,
+    pub tg_dec: AesCtr,
 }
 
 pub struct HandshakeResult {
@@ -63,7 +63,7 @@ pub fn parse_client_handshake(
         }
     };
 
-    let mut decryptor = Aes128Ctr::new(&dec_key.into(), iv.into());
+    let mut decryptor = AesCtr::new(&dec_key.into(), iv.into());
     let mut decrypted = *handshake;
     decryptor.apply_keystream(&mut decrypted);
 
@@ -100,7 +100,7 @@ pub fn parse_client_handshake(
 pub fn generate_relay_init(
     upstream_proto: u32,
     dc_idx: i16,
-) -> ([u8; HANDSHAKE_LEN], Aes128Ctr, Aes128Ctr) {
+) -> ([u8; HANDSHAKE_LEN], AesCtr, AesCtr) {
     let mut rng = rand::thread_rng();
     let mut rnd = [0u8; HANDSHAKE_LEN];
 
@@ -136,7 +136,7 @@ pub fn generate_relay_init(
     let enc_key = &rnd[SKIP_LEN..SKIP_LEN + PREKEY_LEN];
     let enc_iv = &rnd[SKIP_LEN + PREKEY_LEN..SKIP_LEN + PREKEY_LEN + IV_LEN];
 
-    let mut encryptor = Aes128Ctr::new(enc_key.into(), enc_iv.into());
+    let mut encryptor = AesCtr::new(enc_key.into(), enc_iv.into());
 
     // Build plain tail (8 bytes): proto_tag (4) + dc_idx (2) + random padding (2)
     let mut tail_plain = [0u8; 8];
@@ -164,8 +164,8 @@ pub fn generate_relay_init(
     let dec_key = &dec_prekey_iv[0..32];
     let dec_iv = &dec_prekey_iv[32..48];
 
-    let mut tg_enc = Aes128Ctr::new(enc_key.into(), enc_iv.into());
-    let tg_dec = Aes128Ctr::new(dec_key.into(), dec_iv.into());
+    let mut tg_enc = AesCtr::new(enc_key.into(), enc_iv.into());
+    let tg_dec = AesCtr::new(dec_key.into(), dec_iv.into());
 
     // Advance tg_enc past the 64-byte handshake
     let mut discard = [0u8; 64];
@@ -178,8 +178,8 @@ pub fn generate_relay_init(
 pub fn build_crypto_context(
     client_prekey_iv: &[u8; 48],
     secret: Option<&[u8]>,
-    tg_enc: Aes128Ctr,
-    tg_dec: Aes128Ctr,
+    tg_enc: AesCtr,
+    tg_dec: AesCtr,
 ) -> CryptoContext {
     let clt_dec_prekey = &client_prekey_iv[..PREKEY_LEN];
     let clt_dec_iv = &client_prekey_iv[PREKEY_LEN..];
@@ -212,8 +212,8 @@ pub fn build_crypto_context(
 
     let clt_enc_iv = &clt_enc_prekey_iv[PREKEY_LEN..];
 
-    let mut client_dec = Aes128Ctr::new(&clt_dec_key.into(), clt_dec_iv.into());
-    let client_enc = Aes128Ctr::new(&clt_enc_key.into(), clt_enc_iv.into());
+    let mut client_dec = AesCtr::new(&clt_dec_key.into(), clt_dec_iv.into());
+    let client_enc = AesCtr::new(&clt_enc_key.into(), clt_enc_iv.into());
 
     // Advance client_dec past the client's 64-byte handshake
     let mut discard = [0u8; 64];

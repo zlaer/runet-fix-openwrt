@@ -10,8 +10,8 @@ description = "High-performance, ultra-low-memory Telegram Transparent Proxy & W
 tokio = { version = "1.38", default-features = false, features = ["rt", "net", "time", "macros", "io-util", "sync"] }
 
 # TLS stack without OpenSSL runtime dependency
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 webpki-roots = "0.26"
 
 # Pure Rust Cryptography (zero dynamic dependencies, zero heap overhead)

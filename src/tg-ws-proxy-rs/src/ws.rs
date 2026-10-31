@@ -79,11 +79,12 @@ pub struct RawWebSocket {
 impl RawWebSocket {
     /// Creates a shared Rustls ClientConfig using bundled Mozilla root certificates.
     pub fn create_tls_config() -> Arc<ClientConfig> {
-        let root_store = tokio_rustls::rustls::RootCertStore {
-            roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
-        };
+        let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-        let config = ClientConfig::builder()
+        let config = ClientConfig::builder_with_provider(Arc::new(tokio_rustls::rustls::crypto::ring::default_provider()))
+            .with_safe_default_protocol_versions()
+            .expect("ring default protocol versions")
             .with_root_certificates(root_store)
             .with_no_client_auth();
 

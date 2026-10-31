@@ -74,7 +74,6 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
 
         let pool_ref = pool.clone();
         let secret_ref = secret_bytes.clone();
-        let tls_ref = tls_config.clone();
 
         tokio::spawn(async move {
             let label = peer_addr.to_string();
