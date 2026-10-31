@@ -33,16 +33,23 @@ case "$1" in
         fi
         ;;
     check-update|check_update)
-        latest=$(curl -s -k -m 5 "$GITHUB_RAW/version" 2>/dev/null | tr -d '\r\n ')
-        if [ -z "$latest" ]; then
-            latest=$(curl -s -k -m 5 "$GITHUB_API" 2>/dev/null | grep '"tag_name":' | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d 'v\r\n ')
+        raw_res=$(curl -s -k -m 5 "$GITHUB_RAW/version" 2>/dev/null | tr -d '\r\n ')
+        if echo "$raw_res" | grep -Eq '^[vV]?[0-9]+(\.[0-9]+)+$'; then
+            latest="$raw_res"
+        else
+            api_res=$(curl -s -k -m 5 "$GITHUB_API" 2>/dev/null | grep '"tag_name":' | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d 'v\r\n ')
+            if echo "$api_res" | grep -Eq '^[vV]?[0-9]+(\.[0-9]+)+$'; then
+                latest="$api_res"
+            else
+                latest=""
+            fi
         fi
 
         if [ -z "$latest" ]; then
             if [ "$2" = "--json" ]; then
-                echo "{\"status\": \"error\", \"current_version\": \"$CURRENT_VERSION\", \"message\": \"Failed to reach GitHub\"}"
+                echo "{\"status\": \"error\", \"current_version\": \"$CURRENT_VERSION\", \"message\": \"Repository is private or unreachable (HTTP 404/Offline)\"}"
             else
-                echo "Error: Could not check for updates (GitHub unreachable or repository offline)."
+                echo "Error: Could not check for updates (Repository is private or GitHub is unreachable)."
             fi
             exit 1
         fi
@@ -132,8 +139,10 @@ EOF
         chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py 2>/dev/null || true
 
         echo "Clearing LuCI view and index cache..."
-        rm -f /tmp/luci-indexcache
+        rm -f /tmp/luci-indexcache*
+        touch /lib/apk/db/installed /usr/lib/opkg/status 2>/dev/null || true
         killall -HUP rpcd 2>/dev/null || true
+        /etc/init.d/uhttpd restart 2>/dev/null || true
 
         echo "Restarting runet-fix services..."
         /etc/init.d/runet-fix restart

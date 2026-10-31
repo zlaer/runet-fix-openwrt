@@ -434,7 +434,7 @@ return view.extend({
 				'</div>';
 		};
 
-		// Status Overview Table with Version & Actions
+		// Status Overview Table
 		var o = s.option(form.DummyValue, '_status_table', t.status_table);
 		o.rawhtml = true;
 		o.cfgvalue = function() {
@@ -450,25 +450,10 @@ return view.extend({
 				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (' + adblockRules.toLocaleString() + ' ' + t.domains + ')</span>' :
 				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.inactive + '</span>';
 
-			var versionRow = '<div class="tr">' +
-				'<div class="td" style="font-weight:bold;">' + t.version_row_name + '</div>' +
-				'<div class="td">' +
-				'  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">' +
-				'    <span class="badge" style="background:#007bff;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;font-size:12px;">v' + currentVersion + '</span>' +
-				'    <span id="rf-update-status" style="font-size:13px;color:#888;"></span>' +
-				'    <div style="display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap;">' +
-				'      <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
-				'      <button type="button" class="btn cbi-button-save" id="btn-do-upd" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixPerformUpdate()">' + t.btn_update + '</button>' +
-				'    </div>' +
-				'  </div>' +
-				'</div>' +
-				'</div>';
-
 			return '<div class="table" style="margin-top:10px;">' +
 				'<div class="tr"><div class="td" style="font-weight:bold;width:35%;">' + t.zapret_name + '</div><div class="td">' + zapretBadge + '</div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.tg_name + '</div><div class="td">' + tgBadge + ' <small style="margin-left:10px;color:#888;">' + t.tg_sub + '</small></div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.adblock_name + '</div><div class="td">' + adblockBadge + ' <small style="margin-left:10px;color:#888;">' + t.adblock_sub + '</small></div></div>' +
-				versionRow +
 				'</div>';
 		};
 
@@ -517,8 +502,7 @@ return view.extend({
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + t.btn_zapret_settings + '</a> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
-				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button> ' +
-				'<button type="button" class="btn cbi-button-action" id="btn-check-upd" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
+				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
 				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
 				'<span style="font-size:13px;color:#888;font-weight:bold;">' + t.lang_label + '</span>' +
 				'<div class="btn-group" style="display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;">' +
