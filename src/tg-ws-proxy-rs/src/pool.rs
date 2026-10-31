@@ -84,19 +84,18 @@ impl WsConnectionPool {
 
     /// Opens a fresh WebSocket connection to Cloudflare or official Telegram endpoint.
     pub async fn create_connection(&self, dc: u8) -> std::io::Result<RawWebSocket> {
-        let fallback_ip = default_ip_for_dc(dc);
+        let path = "/apiws";
 
         // Try configured custom/fallback domains first
         for domain in &self.domains {
             let host = format!("kws{}.{}", dc, domain);
-            let path = format!("/apiws?dst={}&dc={}", fallback_ip, dc);
             if let Ok(ws) = RawWebSocket::connect(
                 &host,
                 &host,
                 443,
-                &path,
+                path,
                 Some(self.tls_config.clone()),
-                Duration::from_secs(6),
+                Duration::from_secs(8),
             )
             .await
             {
@@ -106,14 +105,13 @@ impl WsConnectionPool {
 
         // Direct web.telegram.org fallback
         let tg_host = format!("kws{}.web.telegram.org", dc);
-        let path = "/apiws";
         RawWebSocket::connect(
             &tg_host,
             &tg_host,
             443,
             path,
             Some(self.tls_config.clone()),
-            Duration::from_secs(6),
+            Duration::from_secs(8),
         )
         .await
     }

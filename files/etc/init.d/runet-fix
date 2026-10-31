@@ -351,7 +351,8 @@ status_all() {
         echo "Zapret (nfqws): STOPPED"
     fi
 
-    local tg_pid=$(pidof tg-transproxy 2>/dev/null)
+    local tg_pid=$(pidof tg-ws-proxy 2>/dev/null)
+    [ -z "$tg_pid" ] && tg_pid=$(pidof tg-transproxy 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_proxy" 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_transparent.py" 2>/dev/null)
     if [ -n "$tg_pid" ]; then

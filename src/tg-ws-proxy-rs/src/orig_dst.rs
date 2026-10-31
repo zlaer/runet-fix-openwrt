@@ -61,22 +61,37 @@ pub fn get_original_dst(stream: &TcpStream) -> io::Result<SocketAddrV4> {
 /// Essential for OpenWrt to prevent routing loops: the proxy's own outbound
 /// TCP/WebSocket traffic to Cloudflare or Telegram must not be matched by
 /// prerouting redirect or nfqws DPI queues.
-pub fn set_outbound_mark(stream: &TcpStream, mark: u32) -> io::Result<()> {
-    #[cfg(target_os = "linux")]
-    {
-        let fd = stream.as_raw_fd();
-        let ret = unsafe {
-            libc::setsockopt(
-                fd,
-                libc::SOL_SOCKET,
-                SO_MARK,
-                &mark as *const _ as *const libc::c_void,
-                std::mem::size_of::<u32>() as libc::socklen_t,
-            )
-        };
+/// Sets the socket routing mark (SO_MARK) on an outbound file descriptor.
+///
+/// Essential for OpenWrt to prevent routing loops: the proxy's own outbound
+/// TCP/WebSocket traffic to Cloudflare or Telegram must not be matched by
+/// prerouting redirect or nfqws DPI queues.
+#[cfg(target_os = "linux")]
+pub fn set_outbound_mark_fd(fd: std::os::unix::io::RawFd, mark: u32) -> io::Result<()> {
+    unsafe {
+        let ret = libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            SO_MARK,
+            &mark as *const _ as *const libc::c_void,
+            std::mem::size_of::<u32>() as libc::socklen_t,
+        );
         if ret != 0 {
             log::warn!("Failed to set SO_MARK 0x{:08x}: {}", mark, io::Error::last_os_error());
         }
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn set_outbound_mark_fd(_fd: std::os::raw::c_int, _mark: u32) -> io::Result<()> {
+    Ok(())
+}
+
+pub fn set_outbound_mark(stream: &TcpStream, mark: u32) -> io::Result<()> {
+    #[cfg(target_os = "linux")]
+    {
+        set_outbound_mark_fd(stream.as_raw_fd(), mark)?;
     }
     let _ = mark;
     let _ = stream;

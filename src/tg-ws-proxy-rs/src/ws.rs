@@ -10,7 +10,10 @@ use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_rustls::rustls::ClientConfig;
 use tokio_rustls::TlsConnector;
 
-use crate::orig_dst::{set_outbound_mark, DEFAULT_OUTBOUND_MARK};
+#[cfg(target_os = "linux")]
+use std::os::unix::io::AsRawFd;
+
+use crate::orig_dst::{set_outbound_mark_fd, DEFAULT_OUTBOUND_MARK};
 
 pub const WS_OP_CONT: u8 = 0x0;
 pub const WS_OP_TEXT: u8 = 0x1;
@@ -102,9 +105,49 @@ impl RawWebSocket {
     ) -> io::Result<Self> {
         tokio::time::timeout(timeout_dur, async move {
             let addr = format!("{}:{}", host, port);
-            let tcp = TcpStream::connect(&addr).await?;
-            let _ = tcp.set_nodelay(true);
-            let _ = set_outbound_mark(&tcp, DEFAULT_OUTBOUND_MARK);
+            let addrs = tokio::net::lookup_host(&addr).await?;
+            let mut last_err = None;
+            let mut connected_stream = None;
+
+            for socket_addr in addrs {
+                let socket = if socket_addr.is_ipv4() {
+                    match tokio::net::TcpSocket::new_v4() {
+                        Ok(s) => s,
+                        Err(e) => {
+                            last_err = Some(e);
+                            continue;
+                        }
+                    }
+                } else {
+                    match tokio::net::TcpSocket::new_v6() {
+                        Ok(s) => s,
+                        Err(e) => {
+                            last_err = Some(e);
+                            continue;
+                        }
+                    }
+                };
+
+                let _ = socket.set_nodelay(true);
+                #[cfg(target_os = "linux")]
+                let _ = set_outbound_mark_fd(socket.as_raw_fd(), DEFAULT_OUTBOUND_MARK);
+
+                match socket.connect(socket_addr).await {
+                    Ok(stream) => {
+                        connected_stream = Some(stream);
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = Some(e);
+                    }
+                }
+            }
+
+            let tcp = connected_stream.ok_or_else(|| {
+                last_err.unwrap_or_else(|| {
+                    io::Error::new(io::ErrorKind::NotConnected, format!("Cannot connect to {}", addr))
+                })
+            })?;
 
             let stream = if let Some(cfg) = tls_config {
                 let connector = TlsConnector::from(cfg);
@@ -140,7 +183,7 @@ impl RawWebSocket {
              Connection: Upgrade\r\n\
              Sec-WebSocket-Key: {}\r\n\
              Sec-WebSocket-Version: 13\r\n\
-             User-Agent: tg-ws-proxy-rs/0.2.0\r\n\
+             Sec-WebSocket-Protocol: binary\r\n\
              \r\n",
             path, domain, sec_key
         );
