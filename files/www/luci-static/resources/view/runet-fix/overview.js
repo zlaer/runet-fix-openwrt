@@ -31,13 +31,15 @@ var I18N = {
 		stopped: 'ОСТАНОВЛЕН',
 		inactive: 'НЕАКТИВЕН',
 		domains: 'доменов',
+		version_row_name: 'Версия Runet-Fix',
 		version_label: 'Версия:',
 		btn_check_update: 'Проверить обновления',
+		btn_update: 'Обновить',
+		btn_update_now: 'Обновить до',
+		update_confirm: 'Выполнить обновление Runet-Fix с GitHub до последней версии?',
 		checking_update: 'Сверка с GitHub...',
 		up_to_date: 'Установлена последняя версия',
 		update_available: 'Доступно обновление',
-		btn_update_now: 'Обновить до',
-		btn_force_update: 'Обновить Runet-Fix',
 		updating_title: 'Обновление Runet-Fix',
 		updating_desc: 'Загрузка свежего релиза с GitHub, обновление бинарных файлов, скриптов и перезапуск сервисов...',
 		update_done: 'Обновление успешно установлено! Перезагрузка страницы...',
@@ -96,13 +98,15 @@ var I18N = {
 		stopped: 'STOPPED',
 		inactive: 'INACTIVE',
 		domains: 'domains',
+		version_row_name: 'Runet-Fix Version',
 		version_label: 'Version:',
 		btn_check_update: 'Check for Updates',
+		btn_update: 'Update',
+		btn_update_now: 'Update to',
+		update_confirm: 'Update Runet-Fix from GitHub to the latest version?',
 		checking_update: 'Checking GitHub...',
 		up_to_date: 'Latest version installed',
 		update_available: 'Update available',
-		btn_update_now: 'Update to',
-		btn_force_update: 'Update Runet-Fix',
 		updating_title: 'Updating Runet-Fix',
 		updating_desc: 'Downloading latest release from GitHub, updating files and restarting services...',
 		update_done: 'Update installed successfully! Reloading page...',
@@ -197,10 +201,14 @@ return view.extend({
 
 		window.runetFixCheckUpdate = function() {
 			var statusEl = document.getElementById('rf-update-status');
-			var btnContainer = document.getElementById('rf-update-btn-container');
+			var btnUpd = document.getElementById('btn-do-upd');
+			var btnCheck = document.getElementById('btn-check-upd');
+
 			if (statusEl) statusEl.innerHTML = '<span style="color:#ffc107;">' + t.checking_update + '</span>';
+			if (btnCheck) btnCheck.disabled = true;
 
 			fs.exec('/usr/bin/runet-fix', ['check-update', '--json']).then(function(res) {
+				if (btnCheck) btnCheck.disabled = false;
 				var stdout = (res && res.stdout) ? res.stdout.trim() : '';
 				var parsed = null;
 				try { parsed = JSON.parse(stdout); } catch(e) {}
@@ -211,32 +219,36 @@ return view.extend({
 							statusEl.innerHTML = '<span class="badge" style="background:#28a745;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold;">' + 
 								t.update_available + ': v' + parsed.latest_version + '</span>';
 						}
-						if (btnContainer) {
-							btnContainer.innerHTML = '<button type="button" class="btn cbi-button-positive" style="padding:4px 12px;font-weight:bold;" onclick="window.runetFixPerformUpdate(\'' + parsed.latest_version + '\')">' + 
-								t.btn_update_now + ' v' + parsed.latest_version + '</button>';
+						if (btnUpd) {
+							btnUpd.innerText = t.btn_update_now + ' v' + parsed.latest_version;
+							btnUpd.className = 'btn cbi-button-positive';
+							btnUpd.onclick = function() { window.runetFixPerformUpdate(parsed.latest_version); };
 						}
 					} else {
 						if (statusEl) {
-							statusEl.innerHTML = '<span style="color:#aaa;">' + t.up_to_date + ' (v' + parsed.current_version + ')</span>';
+							statusEl.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.up_to_date + ' (v' + parsed.current_version + ')</span>';
 						}
-						if (btnContainer) {
-							btnContainer.innerHTML = '<button type="button" class="btn cbi-button-neutral" style="padding:4px 10px;font-size:12px;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>';
+						if (btnUpd) {
+							btnUpd.innerText = t.btn_update;
+							btnUpd.className = 'btn cbi-button-save';
+							btnUpd.onclick = function() { window.runetFixPerformUpdate(); };
 						}
 					}
 				} else {
 					var err = (parsed && parsed.message) ? parsed.message : t.resp_err;
 					if (statusEl) statusEl.innerHTML = '<span style="color:#dc3545;">' + err + '</span>';
-					if (btnContainer) {
-						btnContainer.innerHTML = '<button type="button" class="btn cbi-button-neutral" style="padding:4px 10px;font-size:12px;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>';
-					}
 				}
 			}).catch(function(err) {
+				if (btnCheck) btnCheck.disabled = false;
 				if (statusEl) statusEl.innerHTML = '<span style="color:#dc3545;">' + (err.message || err) + '</span>';
 			});
 		};
 
 		window.runetFixPerformUpdate = function(ver) {
-			if (!confirm((curLang === 'ru' ? 'Выполнить обновление Runet-Fix до версии v' : 'Update Runet-Fix to version v') + (ver || '') + '?')) {
+			var msg = ver ? 
+				((curLang === 'ru' ? 'Выполнить обновление Runet-Fix до версии v' : 'Update Runet-Fix to version v') + ver + '?') : 
+				t.update_confirm;
+			if (!confirm(msg)) {
 				return;
 			}
 			ui.showModal(t.updating_title, [
@@ -408,23 +420,7 @@ return view.extend({
 
 		s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
 
-		// Version & GitHub Update Bar
-		var ver_bar = s.option(form.DummyValue, '_version_bar');
-		ver_bar.rawhtml = true;
-		ver_bar.cfgvalue = function() {
-			return '<div style="display:flex;align-items:center;justify-content:space-between;background:#23272e;border:1px solid #3e4451;padding:10px 14px;border-radius:6px;margin:12px 0;flex-wrap:wrap;gap:10px;">' +
-				'<div style="display:flex;align-items:center;gap:10px;">' +
-				'  <span style="font-weight:bold;color:#fff;">' + t.version_label + '</span>' +
-				'  <span class="badge" style="background:#007bff;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold;font-size:13px;">v' + currentVersion + '</span>' +
-				'  <span id="rf-update-status" style="font-size:13px;color:#bbb;margin-left:6px;"></span>' +
-				'</div>' +
-				'<div id="rf-update-btn-container" style="margin-left:auto;">' +
-				'  <button type="button" class="btn cbi-button-action" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
-				'</div>' +
-				'</div>';
-		};
-
-		// Status Overview Table
+		// Status Overview Table with Version & Actions
 		var o = s.option(form.DummyValue, '_status_table', t.status_table);
 		o.rawhtml = true;
 		o.cfgvalue = function() {
@@ -440,10 +436,25 @@ return view.extend({
 				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (' + adblockRules.toLocaleString() + ' ' + t.domains + ')</span>' :
 				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.inactive + '</span>';
 
+			var versionRow = '<div class="tr">' +
+				'<div class="td" style="font-weight:bold;">' + t.version_row_name + '</div>' +
+				'<div class="td">' +
+				'  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;">' +
+				'    <span class="badge" style="background:#007bff;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;font-size:12px;">v' + currentVersion + '</span>' +
+				'    <span id="rf-update-status" style="font-size:13px;color:#888;"></span>' +
+				'    <div style="display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap;">' +
+				'      <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
+				'      <button type="button" class="btn cbi-button-save" id="btn-do-upd" style="padding:4px 12px;font-size:12px;font-weight:bold;" onclick="window.runetFixPerformUpdate()">' + t.btn_update + '</button>' +
+				'    </div>' +
+				'  </div>' +
+				'</div>' +
+				'</div>';
+
 			return '<div class="table" style="margin-top:10px;">' +
 				'<div class="tr"><div class="td" style="font-weight:bold;width:35%;">' + t.zapret_name + '</div><div class="td">' + zapretBadge + '</div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.tg_name + '</div><div class="td">' + tgBadge + ' <small style="margin-left:10px;color:#888;">' + t.tg_sub + '</small></div></div>' +
 				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.adblock_name + '</div><div class="td">' + adblockBadge + ' <small style="margin-left:10px;color:#888;">' + t.adblock_sub + '</small></div></div>' +
+				versionRow +
 				'</div>';
 		};
 
