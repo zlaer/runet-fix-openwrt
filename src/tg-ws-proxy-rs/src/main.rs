@@ -112,7 +112,7 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             let (parsed, secret_used) = match parse_client_handshake(&handshake_buf, None) {
                 Some(p) => (p, None),
                 None => match secret_ref.as_ref().and_then(|s| parse_client_handshake(&handshake_buf, Some(s))) {
-                    Some(p) => (p, secret_ref.as_deref()),
+                    Some(p) => (p, secret_ref.as_ref().map(|v| v.as_slice())),
                     None => {
                         log::warn!(
                             "[{}] Invalid MTProto handshake from client (protocol mismatch)",
