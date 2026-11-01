@@ -21,6 +21,14 @@ var I18N = {
 		scope_list: 'Только целевой список доменов (Экономит CPU роутера)',
 		discord: 'Перехват голосовых портов Discord UDP',
 		discord_desc: 'Направляет UDP-порты 50000-50100 и 19294-19344 с фейковыми STUN-пакетами для восстановления голосовых каналов Discord.',
+		game_fix: 'Ускорение онлайн-игр (Game UDP Fix)',
+		game_fix_desc: 'Направляет сетевые UDP-порты 27015-27050 и 7777-7780 (Steam, CS2, Dota 2, GTA Online) через Netfilter с игровыми бинарными паттернами для предотвращения потерь пакетов.',
+		section_bypass: 'Исключение устройств локальной сети (Device Bypass)',
+		desc_bypass: 'Устройства в домашней сети (рабочие ноутбуки с VPN, Smart TV, приставки), трафик которых должен идти напрямую без десинхронизации Zapret и проксирования Telegram.',
+		excl_ips: 'Исключенные IP-адреса',
+		excl_ips_desc: 'IPv4-адрес устройства (например: 192.168.1.150). По одному адресу на строку.',
+		excl_macs: 'Исключенные MAC-адреса',
+		excl_macs_desc: 'MAC-адрес устройства (например: AA:BB:CC:DD:EE:FF). По одному на строку.',
 		qnum: 'Номер очереди Netfilter (QNUM)',
 		qnum_desc: 'Номер очереди ядра Linux для обмена пакетами между файрволом и nfqws.',
 		custom_args: 'Пользовательские аргументы nfqws',
@@ -46,6 +54,14 @@ var I18N = {
 		scope_list: 'Target Hostlist Only (Conserves router CPU)',
 		discord: 'Intercept Discord Voice UDP Ports',
 		discord_desc: 'Queues UDP ports 50000-50100 and 19294-19344 with fake STUN packets to restore Discord voice channels.',
+		game_fix: 'Online Games UDP Acceleration (Game UDP Fix)',
+		game_fix_desc: 'Desynchronizes UDP ports 27015-27050 and 7777-7780 (Steam, CS2, Dota 2, GTA Online) with game binary patterns to eliminate TSPU packet drops.',
+		section_bypass: 'Device Bypass (LAN Exclusion)',
+		desc_bypass: 'Local LAN devices (work VPN laptops, Smart TVs, consoles) whose traffic should bypass Zapret and Telegram proxies entirely.',
+		excl_ips: 'Excluded IP Addresses',
+		excl_ips_desc: 'IPv4 address (e.g. 192.168.1.150). One per item.',
+		excl_macs: 'Excluded MAC Addresses',
+		excl_macs_desc: 'MAC address (e.g. AA:BB:CC:DD:EE:FF). One per item.',
 		qnum: 'Netfilter Queue Number (QNUM)',
 		qnum_desc: 'Kernel queue index used for packet exchange between firewall and nfqws.',
 		custom_args: 'Custom nfqws Arguments',
@@ -168,6 +184,9 @@ return view.extend({
 		var discord = s.option(form.Flag, 'discord_fix', t.discord, t.discord_desc);
 		discord.default = '1';
 
+		var game = s.option(form.Flag, 'game_fix', t.game_fix, t.game_fix_desc);
+		game.default = '0';
+
 		var qnum = s.option(form.Value, 'qnum', t.qnum, t.qnum_desc);
 		qnum.datatype = 'port';
 		qnum.default = '200';
@@ -200,6 +219,14 @@ return view.extend({
 		hosts.write = function(section_id, formvalue) {
 			return fs.write('/usr/share/runet-fix/lists/zapret-hosts.txt', formvalue.trim() + '\n');
 		};
+
+		// 4. Device Bypass (LAN exclusion by IP / MAC)
+		var s_bypass = m.section(form.NamedSection, 'zapret', 'zapret', t.section_bypass, t.desc_bypass);
+		var excl_ips = s_bypass.option(form.DynamicList, 'excluded_ips', t.excl_ips, t.excl_ips_desc);
+		excl_ips.datatype = 'ip4addr';
+
+		var excl_macs = s_bypass.option(form.DynamicList, 'excluded_macs', t.excl_macs, t.excl_macs_desc);
+		excl_macs.datatype = 'macaddr';
 
 		return m.render();
 	}

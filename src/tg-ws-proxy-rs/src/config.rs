@@ -23,6 +23,10 @@ pub struct AppConfig {
     #[argh(option)]
     pub domains: Option<String>,
 
+    /// comma-separated list of custom Cloudflare Worker domains (e.g. my-tg.workers.dev)
+    #[argh(option, short = 'w')]
+    pub workers: Option<String>,
+
     /// fake TLS SNI masking domain (optional)
     #[argh(option)]
     pub fake_tls_domain: Option<String>,
@@ -61,6 +65,19 @@ impl AppConfig {
             list.push("stopblocking.co.uk".to_string());
         }
 
+        list
+    }
+
+    pub fn get_worker_list(&self) -> Vec<String> {
+        let mut list = Vec::new();
+        if let Some(ref w) = self.workers {
+            for item in w.split(&[',', ';', ' '][..]) {
+                let trimmed = item.trim();
+                if !trimmed.is_empty() {
+                    list.push(trimmed.to_string());
+                }
+            }
+        }
         list
     }
 }

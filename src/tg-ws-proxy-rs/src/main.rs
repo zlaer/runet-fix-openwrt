@@ -6,6 +6,7 @@ mod pool;
 mod ws;
 
 use std::io;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
@@ -19,6 +20,32 @@ use crate::handshake::{
 use crate::orig_dst::{dc_from_ip, get_original_dst};
 use crate::pool::WsConnectionPool;
 use crate::ws::RawWebSocket;
+
+pub static ACTIVE_SESSIONS: AtomicUsize = AtomicUsize::new(0);
+pub static TOTAL_SESSIONS: AtomicU64 = AtomicU64::new(0);
+pub static POOL_HITS: AtomicU64 = AtomicU64::new(0);
+pub static POOL_MISSES: AtomicU64 = AtomicU64::new(0);
+
+fn dump_stats_file() {
+    let active = ACTIVE_SESSIONS.load(Ordering::Relaxed);
+    let total = TOTAL_SESSIONS.load(Ordering::Relaxed);
+    let hits = POOL_HITS.load(Ordering::Relaxed);
+    let misses = POOL_MISSES.load(Ordering::Relaxed);
+
+    let json = format!(
+        "{{\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{}}}\n",
+        active, total, hits, misses
+    );
+    let _ = std::fs::write("/tmp/tg-ws-proxy-stats.json", json);
+}
+
+struct SessionGuard;
+impl Drop for SessionGuard {
+    fn drop(&mut self) {
+        ACTIVE_SESSIONS.fetch_sub(1, Ordering::Relaxed);
+        dump_stats_file();
+    }
+}
 
 struct SimpleLogger;
 
@@ -53,15 +80,20 @@ fn main() -> io::Result<()> {
     let cfg: AppConfig = argh::from_env();
     init_logging(&cfg.log_level);
 
+    let workers = cfg.get_worker_list();
     log::info!(
-        "Starting tg-ws-proxy-rs v0.2.0 on {}:{} (pool_size={}, domains={})",
+        "Starting tg-ws-proxy-rs v0.3.0 on {}:{} (pool_size={}, domains={}, workers={})",
         cfg.listen,
         cfg.port,
         cfg.pool_size,
-        cfg.get_domain_list().len()
+        cfg.get_domain_list().len(),
+        workers.len()
     );
 
-    // Build ultra-low-memory single-threaded or 2-thread async runtime
+    // Initial stats dump
+    dump_stats_file();
+
+    // Build ultra-low-memory single-threaded async runtime
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
@@ -75,7 +107,12 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
     log::info!("Transparent MTProto proxy listening on {}", bind_addr);
 
     let tls_config = RawWebSocket::create_tls_config();
-    let pool = WsConnectionPool::new(cfg.pool_size, cfg.get_domain_list(), tls_config.clone());
+    let pool = WsConnectionPool::new(
+        cfg.pool_size,
+        cfg.get_domain_list(),
+        cfg.get_worker_list(),
+        tls_config.clone(),
+    );
     let secret_bytes = cfg.get_secret_bytes().map(Arc::new);
 
     loop {
@@ -150,10 +187,12 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             // 4. Acquire WebSocket connection from warm pool or create fresh one
             let mut ws = match pool_ref.take(dc_id).await {
                 Some(conn) => {
+                    POOL_HITS.fetch_add(1, Ordering::Relaxed);
                     log::debug!("[{}] Reusing warm WS connection from pool for DC{}", label, dc_id);
                     conn
                 }
                 None => {
+                    POOL_MISSES.fetch_add(1, Ordering::Relaxed);
                     log::debug!("[{}] Pool empty, opening fresh WS connection for DC{}", label, dc_id);
                     match pool_ref.create_connection(dc_id).await {
                         Ok(conn) => conn,
@@ -180,7 +219,12 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
                 tg_dec,
             );
 
-            // 7. Split client TCP stream and start bi-directional bridge
+            // 7. Track session and start bi-directional streaming bridge
+            ACTIVE_SESSIONS.fetch_add(1, Ordering::Relaxed);
+            TOTAL_SESSIONS.fetch_add(1, Ordering::Relaxed);
+            dump_stats_file();
+            let _guard = SessionGuard;
+
             let (client_read, client_write) = client_stream.into_split();
             if let Err(e) = bridge_stream(
                 client_read,

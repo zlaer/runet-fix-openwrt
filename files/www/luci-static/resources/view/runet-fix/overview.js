@@ -268,6 +268,36 @@ return view.extend({
 			});
 		};
 
+		window.runZapretAutotune = function() {
+			var msg = curLang === 'ru' ? 
+				'Запустить автоматический подбор пресета Zapret?\n\nБудет выполнено тестирование ключевых стратегий против серверов YouTube и Discord (~10-15 сек). Лучший пресет будет автоматически применен.' :
+				'Run Zapret Autotune?\n\nKey strategies will be benchmarked against YouTube and Discord (~10-15s). The fastest working preset will be activated automatically.';
+			if (!confirm(msg)) return;
+
+			ui.showModal(curLang === 'ru' ? 'Авто-подбор пресета Zapret' : 'Zapret Autotune', [
+				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, curLang === 'ru' ? 
+					'Идет тестирование стратегий десинхронизации (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Пожалуйста, подождите.' :
+					'Benchmarking desync strategies (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Please wait.'),
+				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
+			]);
+
+			fs.exec('/usr/bin/runet-fix', ['autotune', '--json', '--apply']).then(function(res) {
+				ui.hideModal();
+				var stdout = (res && res.stdout) ? res.stdout.trim() : '';
+				var parsed = null;
+				try { parsed = JSON.parse(stdout); } catch(e) {}
+				if (parsed && parsed.best_preset) {
+					ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Успешно подобран и активирован пресет: ' : 'Fastest preset activated: ') + parsed.best_preset), 'info');
+					setTimeout(function() { location.reload(); }, 1500);
+				} else {
+					ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Результат теста: ' : 'Autotune result: ') + stdout), 'warning');
+				}
+			}).catch(function(err) {
+				ui.hideModal();
+				ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Ошибка при авто-подборе: ' : 'Autotune error: ') + (err.message || err)), 'error');
+			});
+		};
+
 		window.runRuNetHealthProbe = function() {
 			var btn = document.getElementById('btn-run-probe');
 			var resBox = document.getElementById('probe-results');
@@ -317,7 +347,11 @@ return view.extend({
 				}
 
 				if (parsed.telegram && parsed.telegram.ok) {
-					vTg.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.connected + '</span> <small style="color:#aaa;">' + t.tg_tunnel_active + '</small>';
+					var extra = t.tg_tunnel_active;
+					if (parsed.telegram.stats && parsed.telegram.stats.active_sessions !== undefined) {
+						extra = (curLang === 'ru' ? 'сессий: ' : 'sessions: ') + parsed.telegram.stats.active_sessions;
+					}
+					vTg.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.connected + '</span> <small style="color:#aaa;">(' + extra + ')</small>';
 					if (cTg) cTg.style.borderLeftColor = '#28a745';
 				} else {
 					vTg.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.stopped + '</span>';
@@ -500,6 +534,7 @@ return view.extend({
 
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
+				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + (curLang === 'ru' ? 'Авто-подбор Zapret' : 'Zapret Autotune') + '</button> ' +
 				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + t.btn_zapret_settings + '</a> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
 				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +

@@ -40,6 +40,20 @@ ENABLED=$(uci -q get runet-fix.adblock.enabled || echo "1")
 ENABLE_RU=$(uci -q get runet-fix.adblock.enable_ru || echo "1")
 AUTO_UPDATE=$(uci -q get runet-fix.adblock.auto_update || echo "weekly")
 
+# Check available memory to prevent OOM panic on 64MB routers
+AVAIL_KB=$(awk '/MemAvailable/ { print $2 }' /proc/meminfo 2>/dev/null)
+if [ -z "$AVAIL_KB" ]; then
+    FREE_KB=$(awk '/MemFree/ { print $2 }' /proc/meminfo 2>/dev/null || echo "0")
+    BUFF_KB=$(awk '/Buffers/ { print $2 }' /proc/meminfo 2>/dev/null || echo "0")
+    CACHE_KB=$(awk '/^Cached/ { print $2 }' /proc/meminfo 2>/dev/null || echo "0")
+    AVAIL_KB=$((FREE_KB + BUFF_KB + CACHE_KB))
+fi
+
+if [ -n "$AVAIL_KB" ] && [ "$AVAIL_KB" -gt 0 ] && [ "$AVAIL_KB" -lt 12288 ] && [ "$PROFILE" != "micro" ]; then
+    echo "[runet-fix:adblock] Warning: Low available memory (${AVAIL_KB} kB < 12 MB). Automatically downgrading to micro profile (<2MB RAM) to prevent OOM panic."
+    PROFILE="micro"
+fi
+
 # Sync crontab schedule
 CRON_FILE="/etc/crontabs/root"
 mkdir -p /etc/crontabs
@@ -72,10 +86,14 @@ fi
 rm -f "$TEMP_RAW" "$TEMP_DOMAINS"
 touch "$TEMP_RAW"
 
-# 1. Fetch StevenBlack Unified Base List
-echo "[runet-fix:adblock] Fetching base adblock list..."
-fetch_file "$STEVENBLACK_UNIFIED" "/tmp/base.tmp" && cat "/tmp/base.tmp" >> "$TEMP_RAW"
-rm -f "/tmp/base.tmp"
+# 1. Fetch StevenBlack Unified Base List (skipped in micro profile)
+if [ "$PROFILE" != "micro" ]; then
+    echo "[runet-fix:adblock] Fetching base adblock list..."
+    fetch_file "$STEVENBLACK_UNIFIED" "/tmp/base.tmp" && cat "/tmp/base.tmp" >> "$TEMP_RAW"
+    rm -f "/tmp/base.tmp"
+else
+    echo "[runet-fix:adblock] Micro profile active (<2MB RAM) - loading curated Russian ad/tracker filters..."
+fi
 
 # 2. Russian Filters (RU AdList & Trackers)
 if [ "$ENABLE_RU" = "1" ]; then

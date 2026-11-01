@@ -21,8 +21,11 @@ var I18N = {
 		ru_filter_desc: 'Добавляет специализированные фильтры блокировки русскоязычной рекламы, счетчиков и онлайн-видеоплееров.',
 		profile: 'Профиль фильтрации',
 		profile_desc: 'Выберите профиль фильтрации. Стандартный включает StevenBlack Unified и русские фильтры.',
-		profile_standard: 'Стандартный (StevenBlack + RU AdList ~170 тыс. доменов)',
+		profile_micro: 'Микро (<2 МБ ОЗУ - только RU AdList ~15 тыс. доменов, для роутеров 64 МБ RAM)',
+		profile_standard: 'Стандартный (StevenBlack + RU AdList ~76 тыс. доменов)',
 		profile_aggressive: 'Агрессивный (Стандартный + защита от скрытого майнинга)',
+		filter_aaaa: 'Защита от обхода через IPv6 (filter-aaaa)',
+		filter_aaaa_desc: 'Блокирует AAAA (IPv6) DNS-ответы, принудительно направляя устройства исключительно по IPv4 через Zapret и прокси без утечек.',
 		schedule: 'Автоматическое обновление списков (Cron)',
 		schedule_desc: 'Автоматически загружает свежие правила фильтрации в фоновом режиме.',
 		sched_weekly: 'Еженедельно (Каждое воскресенье в 04:00 - Рекомендуется)',
@@ -50,8 +53,11 @@ var I18N = {
 		ru_filter_desc: 'Adds specialized filters for blocking Russian ads, trackers, counters, and web players.',
 		profile: 'Filter Profile',
 		profile_desc: 'Select filter intensity. Standard profile includes StevenBlack Unified and Russian filters.',
-		profile_standard: 'Standard (StevenBlack + RU AdList ~170k domains)',
+		profile_micro: 'Micro (<2 MB RAM - curated RU AdList ~15k domains, for 64MB RAM routers)',
+		profile_standard: 'Standard (StevenBlack + RU AdList ~76k domains)',
 		profile_aggressive: 'Aggressive (Standard + Anti-Coinminer protection)',
+		filter_aaaa: 'Filter IPv6 AAAA Queries (filter-aaaa)',
+		filter_aaaa_desc: 'Filters out AAAA (IPv6) DNS responses, forcing all LAN devices over IPv4 through Zapret and proxy tunnels without leaks.',
 		schedule: 'Automatic List Update (Cron)',
 		schedule_desc: 'Automatically downloads updated filter rules in background.',
 		sched_weekly: 'Weekly (Every Sunday at 04:00 - Recommended)',
@@ -150,9 +156,15 @@ return view.extend({
 		ru.default = '1';
 
 		var profile = s.option(form.ListValue, 'profile', t.profile, t.profile_desc);
+		profile.value('micro', t.profile_micro);
 		profile.value('standard', t.profile_standard);
 		profile.value('aggressive', t.profile_aggressive);
 		profile.default = 'standard';
+
+		var filterAaaa = s.option(form.Flag, 'filter_aaaa', t.filter_aaaa, t.filter_aaaa_desc);
+		filterAaaa.default = '0';
+		filterAaaa.uciconfig = 'runet-fix';
+		filterAaaa.ucisection = 'main';
 
 		var schedule = s.option(form.ListValue, 'auto_update', t.schedule, t.schedule_desc);
 		schedule.value('weekly', t.sched_weekly);

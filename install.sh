@@ -170,6 +170,8 @@ fi
 if [ -f /usr/bin/tg-ws-proxy ]; then
     if /usr/bin/tg-ws-proxy --help >/dev/null 2>&1; then
         echo "${GREEN}Native Rust Telegram proxy (tg-ws-proxy) verified successfully (<2.5MB RAM).${NC}"
+        # Clean up legacy Python files to conserve router flash storage
+        rm -rf /usr/share/runet-fix/tg_ws_proxy 2>/dev/null || true
     else
         echo "${YELLOW}Native tg-ws-proxy is not compatible with this CPU architecture, falling back to Python 3.${NC}"
         rm -f /usr/bin/tg-ws-proxy

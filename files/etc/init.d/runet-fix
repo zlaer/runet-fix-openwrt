@@ -182,7 +182,17 @@ start_service() {
                     fi
                 fi
 
-                # 4. Main Web TCP profile (ports 80, 443)
+                # 4. Online Game UDP Fix (Steam, CS2, Dota 2, GTA Online)
+                local game_opts=""
+                local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
+                if [ "$game_fix" = "1" ]; then
+                    game_opts="--new --filter-udp=27015-27050,7777-7780 --dpi-desync=fake --dpi-desync-repeats=4"
+                    if [ -f "$bin_dir/ACTIVE_GAME_UDP.bin" ]; then
+                        game_opts="$game_opts --dpi-desync-fake-unknown=$bin_dir/ACTIVE_GAME_UDP.bin"
+                    fi
+                fi
+
+                # 5. Main Web TCP profile (ports 80, 443)
                 local main_tcp="--new --filter-tcp=80,443 $desync_opts"
                 if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
                     main_tcp="$main_tcp --hostlist=$hostlist"
@@ -194,6 +204,7 @@ start_service() {
                 args="--qnum=$qnum $quic_opts"
                 [ -n "$voice_opts" ] && args="$args $voice_opts"
                 [ -n "$media_opts" ] && args="$args $media_opts"
+                [ -n "$game_opts" ] && args="$args $game_opts"
                 args="$args $main_tcp"
             fi
 
@@ -248,6 +259,7 @@ start_service() {
             procd_set_param command "$TG_RUST_BIN" -p "$tg_port" -l "0.0.0.0" --pool-size "$tg_pool_size"
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
             [ -n "$custom_domains" ] && procd_append_param command --domains "$custom_domains"
+            [ -n "$custom_workers" ] && procd_append_param command --workers "$custom_workers"
         elif [ "$engine_type" = "c_native" ]; then
             echo "[runet-fix] Launching native C Telegram transparent proxy on port $tg_port..."
             procd_set_param command "$TG_C_BIN" -p "$tg_port"
@@ -283,12 +295,16 @@ start_service() {
     fi
 
     # Always ensure ECH Type 65 filtering and DoH canary blocking
+    local filter_aaaa=$(uci -q get runet-fix.main.filter_aaaa || echo "0")
     cat << 'EOF' > /tmp/dnsmasq.d/runet-fix-filter.conf
 # Strip Type 65 (HTTPS RR) so browsers fallback from ECH/HTTP3 to standard TLS ClientHello
 filter-rr=65
 # Signal browsers (Firefox, Chrome) to disable DoH and use local DNS
 server=/use-application-dns.net/
 EOF
+    if [ "$filter_aaaa" = "1" ]; then
+        echo "filter-aaaa" >> /tmp/dnsmasq.d/runet-fix-filter.conf
+    fi
 
     local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
     if [ "$adb_enabled" = "1" ]; then

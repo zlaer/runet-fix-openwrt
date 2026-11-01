@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.2.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.3.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]
@@ -40,29 +40,34 @@
 * **Обзор (Overview)**:
   * Статус служб: Zapret, Telegram Transparent Proxy, dnsmasq Smart Adblock (с количеством заблокированных доменов).
   * **Виджет версии и обновлений**: отображение текущей версии, сверка с GitHub и кнопка обновления в один клик.
-  * **Экспресс-диагностика RuNet Health Probe**: проверка доступности YouTube 4K, Discord Gateway, туннеля Telegram и DNS за 1–2 секунды с замером задержки.
+  * **Экспресс-диагностика RuNet Health Probe**: проверка доступности YouTube 4K, Discord Gateway, туннеля Telegram и DNS за 1–2 секунды с замером задержки и счетчиком сессий.
+  * **Авто-подбор пресетов (Zapret Autotune)**: быстрое тестирование 6 ключевых стратегий против YouTube/Discord в 1 клик с автоматической активацией лучшего пресета.
   * Быстрые действия: перезапуск служб, переход в настройки Zapret, обновление Adblock, смена языка интерфейса (RU/ENG), удаление пакета.
 * **Zapret (DPI)**:
   * Выбор из 22 проверенных пресетов:
-    * `YouTube 4K Multisplit` (Рекомендуемый - Multisplit + Seqovl)
-    * `Flowseal General` (Multisplit Pos 1 Seqovl 568 + 4PDA BIN)
-    * Линейка `Flowseal ALT (ALT1–ALT13)`
-    * Семейство `Flowseal FAKE TLS AUTO / ALT`
-    * `Flowseal SIMPLE FAKE` и `Flowseal EXP`
-    * `Custom` (ручной ввод аргументов nfqws)
+    * YouTube 4K Multisplit (Рекомендуемый - Multisplit + Seqovl)
+    * Flowseal General (Multisplit Pos 1 Seqovl 568 + 4PDA BIN)
+    * Линейка Flowseal ALT (ALT1–ALT13)
+    * Семейство Flowseal FAKE TLS AUTO / ALT
+    * Flowseal SIMPLE FAKE и Flowseal EXP
+    * Custom (ручной ввод аргументов nfqws)
   * Режим работы: «Весь трафик» (All Traffic) или «Только список хостов» (Hostlist Mode).
   * Фикс голосовых каналов Discord (WebRTC & STUN UDP).
+  * **Ускорение онлайн-игр (Game UDP Fix)**: десинхронизация портов Steam, CS2, Dota 2, GTA Online с оригинальными бинарными паттернами.
+  * **Исключение устройств (Device Bypass)**: обход перехвата по IP и MAC-адресам для рабочих VPN-ноутбуков и Smart TV.
   * Встроенные редакторы списков исключений (российские банки, Госуслуги) и целевых доменов.
 * **Telegram Proxy**:
   * Включение/отключение прозрачного перехвата.
   * Настройка порта (по умолчанию 1443).
-  * Подключение персональных Cloudflare Workers и кастомных доменов.
+  * Подключение персональных Cloudflare Workers (--workers) и кастомных доменов прямо в нативном Rust-демоне.
+  * Адаптивный (Demand-driven) пулинг соединений к DC2/DC4.
 * **Smart Adblock**:
-  * Выбор профиля фильтрации: Легкий (~40k), Стандартный (~76k+ с доменами Рунета), Агрессивный.
+  * Выбор профиля фильтрации: Микро (<2 МБ ОЗУ для 64 МБ роутеров), Стандартный (~76k+ с доменами Рунета), Агрессивный.
+  * Защита от утечек и обхода через IPv6 (ilter-aaaa).
   * Редакторы белого и черного списков.
   * Автоматическое обновление базы по расписанию.
 * **Диагностика и Логи**:
-  * Полный тест сетевых сокетов и просмотр системных логов `logread` в реальном времени.
+  * Полный тест сетевых сокетов, авто-бенчмаркинг пресетов и просмотр системных логов logread в реальном времени.
 
 ---
 

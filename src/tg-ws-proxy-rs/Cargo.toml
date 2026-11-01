@@ -1,6 +1,6 @@
 [package]
 name = "tg-ws-proxy"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Senior Systems Engineer"]
 description = "High-performance, ultra-low-memory Telegram Transparent Proxy & WebSocket Bridge for OpenWrt"

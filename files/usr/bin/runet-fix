@@ -3,7 +3,7 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.1.0"
+CURRENT_VERSION="1.3.0"
 [ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
 
 REPO_USER="zlaer"
@@ -160,6 +160,80 @@ EOF
     firewall)
         /usr/share/runet-fix/scripts/runet-fix-firewall.sh status
         ;;
+    autotune)
+        IS_JSON=0
+        DO_APPLY=0
+        for arg in "$@"; do
+            [ "$arg" = "--json" ] && IS_JSON=1
+            [ "$arg" = "--apply" ] && DO_APPLY=1
+        done
+
+        ORIG_PRESET=$(uci -q get runet-fix.zapret.preset || echo "youtube_4k")
+        CANDIDATES="flowseal_general youtube_4k general_alt general_alt11 general_fake_tls_auto fakedsplit_badseq"
+
+        [ "$IS_JSON" = "0" ] && echo "=== [runet-fix Zapret Autotune & Preset Benchmark] ==="
+
+        BEST_PRESET=""
+        BEST_SCORE=999999
+        JSON_RESULTS=""
+
+        for p in $CANDIDATES; do
+            [ "$IS_JSON" = "0" ] && echo -n "Testing preset '$p'... "
+            uci set runet-fix.zapret.preset="$p"
+            /etc/init.d/runet-fix restart >/dev/null 2>&1
+            sleep 1
+
+            yt_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
+            yt_code=$(echo "$yt_raw" | cut -d: -f1)
+            yt_time=$(echo "$yt_raw" | cut -d: -f2)
+            yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }")
+
+            dc_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
+            dc_code=$(echo "$dc_raw" | cut -d: -f1)
+            dc_time=$(echo "$dc_raw" | cut -d: -f2)
+            dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }")
+
+            score=999999
+            if [ "$yt_code" != "000" ] && [ -n "$yt_code" ]; then
+                score=$((yt_ms + dc_ms))
+            fi
+
+            if [ "$score" -lt "$BEST_SCORE" ]; then
+                BEST_SCORE=$score
+                BEST_PRESET="$p"
+            fi
+
+            [ "$IS_JSON" = "0" ] && echo "YouTube: HTTP $yt_code (${yt_ms}ms), Discord: HTTP $dc_code (${dc_ms}ms) [score: $score]"
+
+            res_obj="{\"preset\":\"$p\",\"yt_code\":\"$yt_code\",\"yt_ms\":$yt_ms,\"dc_code\":\"$dc_code\",\"dc_ms\":$dc_ms,\"score\":$score}"
+            if [ -z "$JSON_RESULTS" ]; then
+                JSON_RESULTS="$res_obj"
+            else
+                JSON_RESULTS="$JSON_RESULTS,$res_obj"
+            fi
+        done
+
+        if [ "$DO_APPLY" = "1" ] && [ -n "$BEST_PRESET" ]; then
+            uci set runet-fix.zapret.preset="$BEST_PRESET"
+            uci commit runet-fix
+            /etc/init.d/runet-fix restart >/dev/null 2>&1
+            [ "$IS_JSON" = "0" ] && echo ">>> Best preset '$BEST_PRESET' applied to UCI configuration!"
+        else
+            uci set runet-fix.zapret.preset="$ORIG_PRESET"
+            uci commit runet-fix
+            /etc/init.d/runet-fix restart >/dev/null 2>&1
+        fi
+
+        if [ "$IS_JSON" = "1" ]; then
+            applied=0; [ "$DO_APPLY" = "1" ] && applied=1
+            echo "{\"results\":[$JSON_RESULTS],\"best_preset\":\"$BEST_PRESET\",\"applied\":$applied}"
+        else
+            echo "=========================================================="
+            echo "Recommended fastest preset: $BEST_PRESET (score: $BEST_SCORE)"
+            [ "$DO_APPLY" = "0" ] && echo "Run with --apply to automatically activate this preset."
+            echo "=========================================================="
+        fi
+        ;;
     uninstall)
         if [ -x /usr/share/runet-fix/scripts/uninstall.sh ]; then
             exec /usr/share/runet-fix/scripts/uninstall.sh
@@ -187,6 +261,9 @@ EOF
                 tg_daemon=1
             fi
 
+            tg_stats="{}"
+            [ -f /tmp/tg-ws-proxy-stats.json ] && tg_stats=$(cat /tmp/tg-ws-proxy-stats.json 2>/dev/null || echo "{}")
+
             dns_ok=0; if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then dns_ok=1; fi
             ad_ok=0; if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then ad_ok=1; fi
 
@@ -194,7 +271,7 @@ EOF
 {
   "youtube": {"ok": $yt_ok, "code": "$yt_code", "ms": $yt_ms},
   "discord": {"ok": $dc_ok, "code": "$dc_code", "ms": $dc_ms},
-  "telegram": {"ok": $tg_daemon},
+  "telegram": {"ok": $tg_daemon, "stats": $tg_stats},
   "dns": {"ok": $dns_ok, "adblock_ok": $ad_ok}
 }
 EOF
@@ -228,7 +305,8 @@ EOF
         ;;
     *)
         echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"
-        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|firewall|test|log|uninstall}"
+        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|firewall|test|autotune|log|uninstall}"
+        echo "       runet-fix autotune [--json] [--apply]"
         echo "       runet-fix version [--json]"
         echo "       runet-fix check-update [--json]"
         echo "       runet-fix update"
