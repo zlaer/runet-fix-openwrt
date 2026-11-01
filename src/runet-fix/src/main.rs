@@ -59,8 +59,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let prog_name = args.get(0).map(|s| s.as_str()).unwrap_or("");
     let is_tg_proxy = prog_name.ends_with("tg-ws-proxy") || prog_name.ends_with("tg-ws-proxy.exe");
 
-    // Default to daemon mode when invoked as tg-ws-proxy or when options are passed directly
-    if is_tg_proxy || (args.len() > 1 && args[1].starts_with("--")) {
+    // Version flag
+    if args.len() > 1 && (args[1] == "-v" || args[1] == "--version" || args[1] == "version") {
+        let is_json = args.iter().any(|a| a == "--json");
+        if is_json {
+            println!("{{\"version\":\"{}\"}}", VERSION);
+        } else {
+            println!("{}", VERSION);
+        }
+        return Ok(());
+    }
+
+    // Help flag
+    if args.len() > 1 && (args[1] == "-h" || args[1] == "--help" || args[1] == "help") {
+        if is_tg_proxy {
+            println!("tg-ws-proxy - High-performance Telegram Transparent Proxy & WebSocket Bridge");
+            println!("Usage: tg-ws-proxy [-p <port>] [-l <listen>] [-s <secret>] [--pool-size <size>] [-w <workers>] [--domains <domains>]");
+        } else {
+            print_usage();
+        }
+        return Ok(());
+    }
+
+    // Default to daemon mode when invoked as tg-ws-proxy or when flags start with '-' (e.g. -p 1443)
+    if is_tg_proxy || (args.len() > 1 && args[1].starts_with('-')) {
         init_logging("info");
         let proxy_args = if args.len() > 1 { &args[1..] } else { &[] };
         return proxy::run(proxy_args);
@@ -101,15 +123,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Ok(())
         }
-        "version" | "-v" | "--version" => {
-            let is_json = subargs.iter().any(|a| a == "--json");
-            if is_json {
-                println!("{{\"version\":\"{}\"}}", VERSION);
-            } else {
-                println!("{}", VERSION);
-            }
-            Ok(())
-        }
         "start" | "stop" | "restart" => {
             let status = Command::new("/etc/init.d/runet-fix")
                 .arg(subcmd)
@@ -124,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let status = fw_cmd.status()?;
             std::process::exit(status.code().unwrap_or(0));
         }
-        "help" | "-h" | "--help" | _ => {
+        _ => {
             print_usage();
             Ok(())
         }

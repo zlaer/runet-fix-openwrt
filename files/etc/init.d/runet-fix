@@ -373,6 +373,8 @@ status_all() {
     fi
 
     local tg_pid=$(pidof tg-ws-proxy 2>/dev/null)
+    [ -z "$tg_pid" ] && tg_pid=$(pidof runet-fix-core 2>/dev/null)
+    [ -z "$tg_pid" ] && tg_pid=$(pidof runet-fix 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pidof tg-transproxy 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_proxy" 2>/dev/null)
     [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_transparent.py" 2>/dev/null)
