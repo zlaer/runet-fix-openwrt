@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 #[cfg(unix)]
 use std::fs;
 #[cfg(unix)]
@@ -7,7 +9,7 @@ use std::sync::atomic::Ordering;
 #[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::UnixListener;
 #[cfg(unix)]
 use crate::proxy::pool::WsConnectionPool;
 #[cfg(unix)]
@@ -16,7 +18,7 @@ use crate::proxy::{ACTIVE_SESSIONS, POOL_HITS, POOL_MISSES, TOTAL_SESSIONS};
 pub const IPC_SOCKET_PATH: &str = "/var/run/runet-fix.sock";
 
 #[cfg(unix)]
-pub async fn run_ipc_server(_pool: WsConnectionPool) {
+pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
     if Path::new(IPC_SOCKET_PATH).exists() {
         let _ = fs::remove_file(IPC_SOCKET_PATH);
     }
