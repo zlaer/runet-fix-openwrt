@@ -256,13 +256,17 @@ return view.extend({
 				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
 			]);
 
+			var savedTimeout = L.env.rpctimeout;
+			L.env.rpctimeout = 180;
 			fs.exec('/usr/bin/runet-fix', ['update']).then(function(res) {
+				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
 				ui.addNotification(null, E('p', t.update_done), 'info');
 				setTimeout(function() {
 					location.reload();
 				}, 2500);
 			}).catch(function(err) {
+				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
 				ui.addNotification(null, E('p', t.update_err + (err.message || err)), 'error');
 			});
@@ -281,7 +285,10 @@ return view.extend({
 				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
 			]);
 
+			var savedTimeout = L.env.rpctimeout;
+			L.env.rpctimeout = 120;
 			fs.exec('/usr/bin/runet-fix', ['autotune', '--json', '--apply']).then(function(res) {
+				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
 				var stdout = (res && res.stdout) ? res.stdout.trim() : '';
 				var parsed = null;
@@ -293,6 +300,7 @@ return view.extend({
 					ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Результат теста: ' : 'Autotune result: ') + stdout), 'warning');
 				}
 			}).catch(function(err) {
+				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
 				ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Ошибка при авто-подборе: ' : 'Autotune error: ') + (err.message || err)), 'error');
 			});

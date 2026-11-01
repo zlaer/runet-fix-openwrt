@@ -15,6 +15,45 @@ pub struct PresetScore {
     pub score: u64,
 }
 
+fn find_nfqws() -> Option<String> {
+    for b in &[
+        "/usr/bin/nfqws2",
+        "/opt/zapret2/nfq2/nfqws2",
+        "/usr/bin/nfqws",
+        "/opt/zapret/nfq/nfqws",
+    ] {
+        if std::path::Path::new(b).exists() {
+            return Some(b.to_string());
+        }
+    }
+    None
+}
+
+fn spawn_candidate_nfqws(nfq_bin: &str, preset: &str, qnum: &str) {
+    let bin_dir = "/usr/share/runet-fix/bin";
+    let exclude = "/usr/share/runet-fix/lists/zapret-exclude.txt";
+    let desync = crate::zapret::get_zapret_args(preset, None);
+
+    let mut args = format!("--qnum={} --filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11", qnum);
+    let quic_bin = format!("{}/quic_initial_www_google_com.bin", bin_dir);
+    if std::path::Path::new(&quic_bin).exists() {
+        args.push_str(&format!(" --dpi-desync-fake-quic={}", quic_bin));
+    }
+
+    args.push_str(&format!(" --new --filter-tcp=80,443 {}", desync));
+
+    if std::path::Path::new(exclude).exists() {
+        if let Ok(metadata) = std::fs::metadata(exclude) {
+            if metadata.len() > 0 {
+                args.push_str(&format!(" --hostlist-exclude={}", exclude));
+            }
+        }
+    }
+
+    let cmd = format!("killall -9 nfqws nfqws2 2>/dev/null; {} {} --daemon", nfq_bin, args);
+    let _ = Command::new("sh").arg("-c").arg(&cmd).output();
+}
+
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut is_json = false;
     let mut do_apply = false;
@@ -28,6 +67,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let orig_preset = uci::get("runet-fix.zapret.preset").unwrap_or_else(|| "youtube_4k".to_string());
+    let qnum = uci::get("runet-fix.zapret.qnum").unwrap_or_else(|| "200".to_string());
+    let nfq_bin = find_nfqws();
+
     let candidates = [
         "flowseal_general",
         "youtube_4k",
@@ -55,14 +97,20 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             let _ = std::io::Write::flush(&mut std::io::stdout());
         }
 
-        uci::set("runet-fix.zapret.preset", p);
-        let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
-        thread::sleep(Duration::from_secs(1));
+        if let Some(ref bin) = nfq_bin {
+            spawn_candidate_nfqws(bin, p, &qnum);
+            thread::sleep(Duration::from_millis(60));
+        } else {
+            uci::set("runet-fix.zapret.preset", p);
+            let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
+            thread::sleep(Duration::from_secs(1));
+        }
 
         let (yt, dc) = runtime.block_on(async {
-            let yt = probe_https("www.youtube.com", 443, 2500).await;
-            let dc = probe_https("gateway.discord.gg", 443, 2500).await;
-            (yt, dc)
+            tokio::join!(
+                probe_https("www.youtube.com", 443, 1500),
+                probe_https("gateway.discord.gg", 443, 1500)
+            )
         });
 
         let mut score: u64 = 999999;

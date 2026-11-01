@@ -3,7 +3,7 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.4.0"
+CURRENT_VERSION="1.4.1"
 [ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
 
 REPO_USER="zlaer"
@@ -181,22 +181,45 @@ EOF
 
         [ "$IS_JSON" = "0" ] && echo "=== [runet-fix Zapret Autotune & Preset Benchmark] ==="
 
+        QNUM=$(uci -q get runet-fix.zapret.qnum || echo "200")
+        NFQ_BIN=""
+        for b in /usr/bin/nfqws2 /opt/zapret2/nfq2/nfqws2 /usr/bin/nfqws /opt/zapret/nfq/nfqws; do
+            [ -x "$b" ] && { NFQ_BIN="$b"; break; }
+        done
+
         BEST_PRESET=""
         BEST_SCORE=999999
         JSON_RESULTS=""
 
         for p in $CANDIDATES; do
             [ "$IS_JSON" = "0" ] && echo -n "Testing preset '$p'... "
-            uci set runet-fix.zapret.preset="$p"
-            /etc/init.d/runet-fix restart >/dev/null 2>&1
-            sleep 1
+            if [ -n "$NFQ_BIN" ]; then
+                desync=$(/usr/bin/runet-fix zapret-args "$p" 2>/dev/null)
+                [ -z "$desync" ] && desync="--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6"
+                killall -9 nfqws nfqws2 >/dev/null 2>&1 || true
+                $NFQ_BIN --qnum="$QNUM" --filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11 --new --filter-tcp=80,443 $desync --daemon >/dev/null 2>&1
+                usleep 60000 2>/dev/null || sleep 0.1 2>/dev/null || true
+            else
+                uci set runet-fix.zapret.preset="$p"
+                /etc/init.d/runet-fix restart >/dev/null 2>&1
+                sleep 1
+            fi
 
-            yt_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
+            curl -s -k -m 2 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" > /tmp/yt_probe.txt 2>/dev/null &
+            pid_yt=$!
+            curl -s -k -m 2 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" > /tmp/dc_probe.txt 2>/dev/null &
+            pid_dc=$!
+            wait $pid_yt 2>/dev/null
+            wait $pid_dc 2>/dev/null
+
+            yt_raw=$(cat /tmp/yt_probe.txt 2>/dev/null || echo "000:2.0")
+            dc_raw=$(cat /tmp/dc_probe.txt 2>/dev/null || echo "000:2.0")
+            rm -f /tmp/yt_probe.txt /tmp/dc_probe.txt
+
             yt_code=$(echo "$yt_raw" | cut -d: -f1)
             yt_time=$(echo "$yt_raw" | cut -d: -f2)
             yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }")
 
-            dc_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
             dc_code=$(echo "$dc_raw" | cut -d: -f1)
             dc_time=$(echo "$dc_raw" | cut -d: -f2)
             dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }")
