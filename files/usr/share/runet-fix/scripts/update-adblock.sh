@@ -2,6 +2,10 @@
 # update-adblock.sh - High-speed, Low-RAM Adblock generator for OpenWrt dnsmasq
 # Part of the runet-fix all-in-one suite.
 
+if [ -x /usr/bin/runet-fix-core ]; then
+    exec /usr/bin/runet-fix-core adblock "$@"
+fi
+
 CONF_DIR="/tmp/dnsmasq.d"
 CONF_FILE="$CONF_DIR/runet-fix-adblock.conf"
 TEMP_RAW="/tmp/adblock_raw.tmp"

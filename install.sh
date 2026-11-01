@@ -137,8 +137,8 @@ if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
     chmod +x /opt/zapret/nfq/nfqws 2>/dev/null || true
 fi
 
-# Multi-arch Telegram native proxy setup
-TG_BIN_URL="https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/master/prebuilt"
+# Multi-arch Telegram and Rust Core setup
+CORE_BIN_URL="https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/master/prebuilt"
 TG_ARCH=""
 case "$ARCH" in
     aarch64*|arm64)
@@ -153,28 +153,47 @@ case "$ARCH" in
 esac
 
 if [ -n "$TG_ARCH" ]; then
-    if [ -f "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" ]; then
+    INSTALLED_CORE=0
+    if [ -f "$REPO_DIR/prebuilt/runet-fix-$TG_ARCH" ]; then
+        echo "Installing native runet-fix-$TG_ARCH from local repo..."
+        cp "$REPO_DIR/prebuilt/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core
+        INSTALLED_CORE=1
+    elif [ -f "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" ]; then
         echo "Installing native tg-ws-proxy-$TG_ARCH from local repo..."
-        cp "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/tg-ws-proxy
+        cp "$REPO_DIR/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core
+        INSTALLED_CORE=1
+    elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/runet-fix-$TG_ARCH" ]; then
+        echo "Installing native runet-fix-$TG_ARCH from package archive..."
+        cp "$SRC/prebuilt/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core
+        INSTALLED_CORE=1
     elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" ]; then
         echo "Installing native tg-ws-proxy-$TG_ARCH from package archive..."
-        cp "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/tg-ws-proxy
+        cp "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core
+        INSTALLED_CORE=1
     else
-        echo "Downloading native tg-ws-proxy for $TG_ARCH..."
-        curl -s -L -k "$TG_BIN_URL/tg-ws-proxy-$TG_ARCH" -o /usr/bin/tg-ws-proxy || true
+        echo "Downloading native runet-fix-core for $TG_ARCH..."
+        if curl -s -L -k "$CORE_BIN_URL/runet-fix-$TG_ARCH" -o /usr/bin/runet-fix-core; then
+            INSTALLED_CORE=1
+        elif curl -s -L -k "$CORE_BIN_URL/tg-ws-proxy-$TG_ARCH" -o /usr/bin/runet-fix-core; then
+            INSTALLED_CORE=1
+        fi
     fi
-    chmod +x /usr/bin/tg-ws-proxy 2>/dev/null || true
+
+    if [ "$INSTALLED_CORE" = "1" ] && [ -f /usr/bin/runet-fix-core ]; then
+        chmod +x /usr/bin/runet-fix-core 2>/dev/null || true
+        ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
+    fi
 fi
 
 # Verify binary runs on this hardware; if not, remove so system falls back gracefully to Python 3
-if [ -f /usr/bin/tg-ws-proxy ]; then
-    if /usr/bin/tg-ws-proxy --help >/dev/null 2>&1; then
-        echo "${GREEN}Native Rust Telegram proxy (tg-ws-proxy) verified successfully (<2.5MB RAM).${NC}"
+if [ -f /usr/bin/runet-fix-core ]; then
+    if /usr/bin/runet-fix-core --help >/dev/null 2>&1; then
+        echo "${GREEN}Native Rust Runet-Fix Core (runet-fix-core) verified successfully (<2.5MB RAM).${NC}"
         # Clean up legacy Python files to conserve router flash storage
         rm -rf /usr/share/runet-fix/tg_ws_proxy 2>/dev/null || true
     else
-        echo "${YELLOW}Native tg-ws-proxy is not compatible with this CPU architecture, falling back to Python 3.${NC}"
-        rm -f /usr/bin/tg-ws-proxy
+        echo "${YELLOW}Native binary is not compatible with this CPU architecture, falling back to Python 3 / shell.${NC}"
+        rm -f /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
     fi
 fi
 

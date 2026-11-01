@@ -1,9 +1,10 @@
-name: Build tg-ws-proxy-rs
+name: Build runet-fix-core
 
 on:
   push:
     branches: [ "master" ]
     paths:
+      - 'src/runet-fix/**'
       - 'src/tg-ws-proxy-rs/**'
       - '.github/workflows/build-rust.yml'
   workflow_dispatch:
@@ -20,19 +21,24 @@ jobs:
       matrix:
         include:
           - target: aarch64-unknown-linux-musl
-            name: tg-ws-proxy-aarch64
+            name: runet-fix-aarch64
+            legacy_name: tg-ws-proxy-aarch64
             allow_fail: false
           - target: armv7-unknown-linux-musleabihf
-            name: tg-ws-proxy-armv7
+            name: runet-fix-armv7
+            legacy_name: tg-ws-proxy-armv7
             allow_fail: false
           - target: x86_64-unknown-linux-musl
-            name: tg-ws-proxy-x86_64
+            name: runet-fix-x86_64
+            legacy_name: tg-ws-proxy-x86_64
             allow_fail: false
           - target: mipsel-unknown-linux-musl
-            name: tg-ws-proxy-mipsel
+            name: runet-fix-mipsel
+            legacy_name: tg-ws-proxy-mipsel
             allow_fail: true
           - target: mips-unknown-linux-musl
-            name: tg-ws-proxy-mips
+            name: runet-fix-mips
+            legacy_name: tg-ws-proxy-mips
             allow_fail: true
 
     steps:
@@ -50,14 +56,15 @@ jobs:
       - name: Build target with cross
         continue-on-error: ${{ matrix.allow_fail }}
         run: |
-          cd src/tg-ws-proxy-rs
+          cd src/runet-fix
           cross build --target ${{ matrix.target }} --release
 
       - name: Compress and package binary
         continue-on-error: ${{ matrix.allow_fail }}
         run: |
-          SRC="src/tg-ws-proxy-rs/target/${{ matrix.target }}/release/tg-ws-proxy"
+          SRC="src/runet-fix/target/${{ matrix.target }}/release/runet-fix"
           DST="${{ matrix.name }}"
+          LEGACY="${{ matrix.legacy_name }}"
           if [ -f "$SRC" ]; then
             cp "$SRC" "$DST"
             chmod +x "$DST"
@@ -66,14 +73,23 @@ jobs:
             upx --best "$DST" || true
             echo "Final compressed binary size:"
             ls -lh "$DST"
+            cp "$DST" "$LEGACY"
           else
             echo "Binary not found, skipping packaging."
             touch "$DST"
+            touch "$LEGACY"
           fi
 
-      - name: Upload Build Artifact
+      - name: Upload Core Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: ${{ matrix.name }}
+          if-no-files-found: error
+
+      - name: Upload Legacy Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.legacy_name }}
+          path: ${{ matrix.legacy_name }}
           if-no-files-found: error

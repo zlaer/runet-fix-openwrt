@@ -9,6 +9,7 @@ STOP=10
 FIREWALL_SCRIPT="/usr/share/runet-fix/scripts/runet-fix-firewall.sh"
 ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
 TG_RUST_BIN="/usr/bin/tg-ws-proxy"
+[ -x /usr/bin/runet-fix-core ] && TG_RUST_BIN="/usr/bin/runet-fix-core"
 TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
 TG_C_BIN="/usr/bin/tg-transproxy"
 
