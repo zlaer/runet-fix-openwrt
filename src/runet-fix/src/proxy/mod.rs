@@ -48,12 +48,9 @@ impl Drop for SessionGuard {
 }
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let mut args_refs: Vec<&str> = vec!["tg-ws-proxy"];
-    for a in args {
-        args_refs.push(a.as_str());
-    }
+    let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
 
-    let cfg: AppConfig = match argh::FromArgs::from_args(&[], &args_refs) {
+    let cfg: AppConfig = match argh::FromArgs::from_args(&["tg-ws-proxy"], &args_refs) {
         Ok(c) => c,
         Err(e) => {
             println!("{}", e.output);
