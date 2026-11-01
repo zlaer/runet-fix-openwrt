@@ -53,8 +53,13 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         args_refs.push(a.as_str());
     }
 
-    let cfg: AppConfig = argh::FromArgs::from_args(&[], &args_refs)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.output))?;
+    let cfg: AppConfig = match argh::FromArgs::from_args(&[], &args_refs) {
+        Ok(c) => c,
+        Err(e) => {
+            println!("{}", e.output);
+            return Ok(());
+        }
+    };
 
     let workers = cfg.get_worker_list();
     log::info!(
