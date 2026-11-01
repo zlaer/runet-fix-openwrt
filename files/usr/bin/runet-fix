@@ -14,7 +14,7 @@ GITHUB_API="https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest"
 
 if [ -x /usr/bin/runet-fix-core ]; then
     case "$1" in
-        daemon|proxy|adblock|update-adblock|autotune|test|zapret-args)
+        daemon|proxy|adblock|update-adblock|autotune|test|zapret-args|status)
             exec /usr/bin/runet-fix-core "$@"
             ;;
     esac

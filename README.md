@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.3.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.4.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]
@@ -142,8 +142,16 @@ runet-fix test
 # Тест в формате JSON (для скриптов и LuCI)
 runet-fix test --json
 
-# Принудительно обновить списки Adblock
-runet-fix update-adblock
+# Высокоскоростная потоковая компиляция правил Adblock на Rust (<1.2 сек)
+runet-fix adblock
+
+# Нативный асинхронный авто-подбор лучшего пресета Zapret
+runet-fix autotune
+runet-fix autotune --json --apply
+
+# Проверка статуса через локальный IPC-сокет
+runet-fix status
+runet-fix status --json
 
 # Показать статус правил файрвола nftables
 runet-fix firewall
