@@ -30,15 +30,18 @@ start_nft() {
     stop_nft >/dev/null 2>&1
 
     # Load configuration values from UCI
-    local main_enabled=$(uci -q get runet-fix.main.enabled || echo "1")
+    local main_enabled=$(uci -q get runet-fix.main.enabled)
+    [ -z "$main_enabled" ] && main_enabled="1"
     if [ "$main_enabled" != "1" ]; then
         echo "[runet-fix] Master switch disabled. Firewall rules cleaned."
         return 0
     fi
 
-    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
+    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled)
+    [ -z "$zapret_enabled" ] && zapret_enabled="1"
     local zapret_mode=$(uci -q get runet-fix.zapret.mode || echo "all")
-    local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
+    local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
+    [ -z "$tg_enabled" ] && tg_enabled="1" 
     local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
@@ -149,7 +152,8 @@ start_nft() {
     fi
 
     # 5. Port 53 DNS redirection (forces all clients through dnsmasq, prevents hardcoded DNS bypass)
-    local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
+    [ -z "$adb_enabled" ] && adb_enabled="1" 
     if [ "$adb_enabled" = "1" ]; then
         nft "add chain inet $TABLE_NAME dns_nat_pre { type nat hook prerouting priority dstnat; policy accept; }"
         nft "add rule inet $TABLE_NAME dns_nat_pre udp dport 53 counter redirect to :53"
@@ -169,14 +173,17 @@ stop_nft() {
 start_ipt() {
     stop_ipt >/dev/null 2>&1
 
-    local main_enabled=$(uci -q get runet-fix.main.enabled || echo "1")
+    local main_enabled=$(uci -q get runet-fix.main.enabled)
+    [ -z "$main_enabled" ] && main_enabled="1"
     if [ "$main_enabled" != "1" ]; then
         echo "[runet-fix] Master switch disabled. Firewall rules cleaned."
         return 0
     fi
 
-    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
-    local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
+    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled)
+    [ -z "$zapret_enabled" ] && zapret_enabled="1"
+    local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
+    [ -z "$tg_enabled" ] && tg_enabled="1" 
     local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")

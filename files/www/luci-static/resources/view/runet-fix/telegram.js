@@ -74,7 +74,8 @@ return view.extend({
 
 	handleSaveApply: function(ev, mode) {
 		return this.handleSave(ev).then(function() {
-			ui.changes.apply(mode == '0');
+			return ui.changes.apply(mode == '0');
+		}).then(function() {
 			return fs.exec('/usr/bin/runet-fix', ['restart']);
 		});
 	},
@@ -122,7 +123,9 @@ return view.extend({
 
 		var s = m.section(form.NamedSection, 'telegram', 'telegram', t.section_title);
 
-		s.option(form.Flag, 'enabled', t.enable, t.enable_desc);
+		var o_en = s.option(form.Flag, 'enabled', t.enable, t.enable_desc);
+		o_en.rmempty = false;
+		o_en.default = o_en.enabled;
 
 		var desc = s.option(form.DummyValue, '_desc');
 		desc.rawhtml = true;

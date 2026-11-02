@@ -83,7 +83,8 @@ return view.extend({
 
 	handleSaveApply: function(ev, mode) {
 		return this.handleSave(ev).then(function() {
-			ui.changes.apply(mode == '0');
+			return ui.changes.apply(mode == '0');
+		}).then(function() {
 			return fs.exec('/usr/bin/runet-fix', ['restart']);
 		});
 	},
@@ -135,7 +136,9 @@ return view.extend({
 		// 1. Zapret Engine Settings Section
 		var s = m.section(form.NamedSection, 'zapret', 'zapret', t.section_engine);
 
-		s.option(form.Flag, 'enabled', t.enable_zapret, t.enable_zapret_desc);
+		var o_en = s.option(form.Flag, 'enabled', t.enable_zapret, t.enable_zapret_desc);
+		o_en.rmempty = false;
+		o_en.default = o_en.enabled;
 
 		var preset = s.option(form.ListValue, 'preset', t.preset, t.preset_desc);
 		
@@ -183,9 +186,11 @@ return view.extend({
 
 		var discord = s.option(form.Flag, 'discord_fix', t.discord, t.discord_desc);
 		discord.default = '1';
+		discord.rmempty = false;
 
 		var game = s.option(form.Flag, 'game_fix', t.game_fix, t.game_fix_desc);
 		game.default = '0';
+		game.rmempty = false;
 
 		var qnum = s.option(form.Value, 'qnum', t.qnum, t.qnum_desc);
 		qnum.datatype = 'port';

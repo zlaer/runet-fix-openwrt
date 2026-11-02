@@ -88,7 +88,8 @@ return view.extend({
 
 	handleSaveApply: function(ev, mode) {
 		return this.handleSave(ev).then(function() {
-			ui.changes.apply(mode == '0');
+			return ui.changes.apply(mode == '0');
+		}).then(function() {
 			return fs.exec('/usr/bin/runet-fix', ['restart']);
 		});
 	},
@@ -140,7 +141,9 @@ return view.extend({
 
 		var s = m.section(form.NamedSection, 'adblock', 'adblock', t.section_conf);
 
-		s.option(form.Flag, 'enabled', t.enable, t.enable_desc);
+		var o_en = s.option(form.Flag, 'enabled', t.enable, t.enable_desc);
+		o_en.rmempty = false;
+		o_en.default = o_en.enabled;
 
 		var info = s.option(form.DummyValue, '_info', t.active_status);
 		info.rawhtml = true;
@@ -154,6 +157,7 @@ return view.extend({
 
 		var ru = s.option(form.Flag, 'enable_ru', t.ru_filter, t.ru_filter_desc);
 		ru.default = '1';
+		ru.rmempty = false;
 
 		var profile = s.option(form.ListValue, 'profile', t.profile, t.profile_desc);
 		profile.value('micro', t.profile_micro);

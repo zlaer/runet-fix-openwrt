@@ -168,7 +168,8 @@ return view.extend({
 
 	handleSaveApply: function(ev, mode) {
 		return this.handleSave(ev).then(function() {
-			ui.changes.apply(mode == '0');
+			return ui.changes.apply(mode == '0');
+		}).then(function() {
 			return fs.exec('/usr/bin/runet-fix', ['restart']);
 		});
 	},
@@ -460,7 +461,9 @@ return view.extend({
 		// 1. Master Switch & System Overview
 		var s = m.section(form.NamedSection, 'main', 'global', t.master_section);
 
-		s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
+		var o_en = s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
+		o_en.rmempty = false;
+		o_en.default = o_en.enabled;
 
 		// Version & Update Management Row
 		var v_ctrl = s.option(form.DummyValue, '_version_control', t.version_row_name);

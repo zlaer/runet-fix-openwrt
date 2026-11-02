@@ -130,17 +130,19 @@ get_zapret_args() {
 }
 
 start_service() {
-    local enabled=$(uci -q get runet-fix.main.enabled || echo "1")
-    [ "$enabled" = "1" ] || {
+    local enabled=$(uci -q get runet-fix.main.enabled)
+    [ -z "$enabled" ] && enabled="1"
+    if [ "$enabled" != "1" ]; then
         echo "[runet-fix] Master switch is disabled in /etc/config/runet-fix"
         stop_service
         return 0
-    }
+    fi
 
     echo "[runet-fix] Starting all-in-one runet-fix service..."
 
     # 1. Start Zapret
-    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled || echo "1")
+    local zapret_enabled=$(uci -q get runet-fix.zapret.enabled)
+    [ -z "$zapret_enabled" ] && zapret_enabled="1"
     if [ "$zapret_enabled" = "1" ]; then
         local nfq_bin=$(find_nfqws)
         if [ -n "$nfq_bin" ]; then
@@ -221,11 +223,12 @@ start_service() {
         fi
     else
         echo "[runet-fix] Zapret DPI engine is disabled in config."
-        killall nfqws nfqws2 >/dev/null 2>&1 || true
+        killall -9 nfqws nfqws2 >/dev/null 2>&1 || true
     fi
 
     # 2. Start Telegram Transparent Proxy
-    local tg_enabled=$(uci -q get runet-fix.telegram.enabled || echo "1")
+    local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
+    [ -z "$tg_enabled" ] && tg_enabled="1" 
     if [ "$tg_enabled" = "1" ]; then
         local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
         local tg_engine=$(uci -q get runet-fix.telegram.engine || echo "auto")
@@ -277,7 +280,8 @@ start_service() {
         procd_close_instance
     else
         echo "[runet-fix] Telegram proxy is disabled in config."
-        killall tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
+        killall -TERM runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
+        killall -9 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
         pkill -f tg_ws_proxy >/dev/null 2>&1 || true
         pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     fi
@@ -307,7 +311,8 @@ EOF
         echo "filter-aaaa" >> /tmp/dnsmasq.d/runet-fix-filter.conf
     fi
 
-    local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
+    [ -z "$adb_enabled" ] && adb_enabled="1" 
     if [ "$adb_enabled" = "1" ]; then
         if [ ! -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
             echo "[runet-fix] Initializing adblock in background..."
@@ -332,23 +337,25 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    killall -TERM nfqws nfqws2 tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
+    killall -TERM nfqws nfqws2 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
     pkill -f tg_ws_proxy >/dev/null 2>&1 || true
     pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     local i=0
-    while pidof nfqws >/dev/null 2>&1 && [ $i -lt 10 ]; do
+    while { pidof nfqws >/dev/null 2>&1 || pidof runet-fix-core >/dev/null 2>&1; } && [ $i -lt 10 ]; do
         usleep 100000
         i=$((i + 1))
     done
-    if pidof nfqws >/dev/null 2>&1; then
-        killall -9 nfqws nfqws2 >/dev/null 2>&1 || true
+    if pidof nfqws >/dev/null 2>&1 || pidof runet-fix-core >/dev/null 2>&1; then
+        killall -9 nfqws nfqws2 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
         usleep 100000
     fi
+    rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+    /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
 }
 
 reload_service() {
-    stop
-    start
+    stop_service
+    start_service
 }
 
 service_triggers() {
