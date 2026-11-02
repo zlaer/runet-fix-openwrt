@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require form';
+'require uci';
 'require fs';
 'require ui';
 

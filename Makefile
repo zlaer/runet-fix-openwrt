@@ -89,6 +89,10 @@ define Package/luci-app-runet-fix/install
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DATA) ./files/usr/share/rpcd/acl.d/luci-app-runet-fix.json $(1)/usr/share/rpcd/acl.d/
 
+	# Install Ucitrack
+	$(INSTALL_DIR) $(1)/usr/share/ucitrack
+	$(INSTALL_DATA) ./files/usr/share/ucitrack/luci-app-runet-fix.json $(1)/usr/share/ucitrack/
+
 	# Install LuCI JS Views
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/runet-fix
 	$(INSTALL_DATA) ./files/www/luci-static/resources/view/runet-fix/* $(1)/www/luci-static/resources/view/runet-fix/

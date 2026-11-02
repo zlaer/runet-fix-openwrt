@@ -1,9 +1,9 @@
 'use strict';
 'require view';
 'require form';
+'require uci';
 'require fs';
 'require ui';
-'require uci';
 
 var I18N = {
 	ru: {

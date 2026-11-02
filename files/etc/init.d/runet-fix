@@ -134,7 +134,11 @@ start_service() {
     [ -z "$enabled" ] && enabled="1"
     if [ "$enabled" != "1" ]; then
         echo "[runet-fix] Master switch is disabled in /etc/config/runet-fix"
-        stop_service
+        if [ -x "$FIREWALL_SCRIPT" ]; then
+            "$FIREWALL_SCRIPT" stop
+        fi
+        rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+        /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
         return 0
     fi
 
@@ -223,7 +227,6 @@ start_service() {
         fi
     else
         echo "[runet-fix] Zapret DPI engine is disabled in config."
-        killall -9 nfqws nfqws2 >/dev/null 2>&1 || true
     fi
 
     # 2. Start Telegram Transparent Proxy
@@ -280,10 +283,6 @@ start_service() {
         procd_close_instance
     else
         echo "[runet-fix] Telegram proxy is disabled in config."
-        killall -TERM runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
-        killall -9 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
-        pkill -f tg_ws_proxy >/dev/null 2>&1 || true
-        pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
     fi
 
     # 3. Apply Unified Firewall Rules
@@ -337,30 +336,12 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    killall -TERM nfqws nfqws2 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
-    pkill -f tg_ws_proxy >/dev/null 2>&1 || true
-    pkill -f tg_ws_transparent.py >/dev/null 2>&1 || true
-    local i=0
-    while { pidof nfqws >/dev/null 2>&1 || pidof runet-fix-core >/dev/null 2>&1; } && [ $i -lt 10 ]; do
-        usleep 100000
-        i=$((i + 1))
-    done
-    if pidof nfqws >/dev/null 2>&1 || pidof runet-fix-core >/dev/null 2>&1; then
-        killall -9 nfqws nfqws2 runet-fix-core tg-ws-proxy tg-transproxy >/dev/null 2>&1 || true
-        usleep 100000
-    fi
     rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
     /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
 }
 
-reload_service() {
-    stop_service
-    start_service
-}
-
 service_triggers() {
     procd_add_reload_trigger "runet-fix"
-    procd_add_config_trigger "config.change" "runet-fix" /etc/init.d/runet-fix reload
 }
 
 extra_command "update_adblock" "Fetch and generate latest adblock rules"
@@ -370,29 +351,32 @@ update_adblock() {
 
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    local ver="1.1.0"
+    local ver="1.4.0"
     [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
     echo "=== [runet-fix v$ver] All-in-One Status ==="
-    local nfq_pid=$(pidof nfqws nfqws2 2>/dev/null)
-    if [ -n "$nfq_pid" ]; then
+
+    local nfq_running=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['zapret'].running" 2>/dev/null)
+    local nfq_pid=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['zapret'].pid" 2>/dev/null)
+    if [ "$nfq_running" = "true" ] && [ -n "$nfq_pid" ]; then
         echo "Zapret (nfqws): RUNNING (PID $nfq_pid)"
+    elif pidof nfqws nfqws2 >/dev/null 2>&1; then
+        echo "Zapret (nfqws): RUNNING (PID $(pidof nfqws nfqws2))"
     else
         echo "Zapret (nfqws): STOPPED"
     fi
 
-    local tg_pid=$(pidof tg-ws-proxy 2>/dev/null)
-    [ -z "$tg_pid" ] && tg_pid=$(pidof runet-fix-core 2>/dev/null)
-    [ -z "$tg_pid" ] && tg_pid=$(pidof runet-fix 2>/dev/null)
-    [ -z "$tg_pid" ] && tg_pid=$(pidof tg-transproxy 2>/dev/null)
-    [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_proxy" 2>/dev/null)
-    [ -z "$tg_pid" ] && tg_pid=$(pgrep -f "tg_ws_transparent.py" 2>/dev/null)
-    if [ -n "$tg_pid" ]; then
+    local tg_running=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['telegram'].running" 2>/dev/null)
+    local tg_pid=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['telegram'].pid" 2>/dev/null)
+    if [ "$tg_running" = "true" ] && [ -n "$tg_pid" ]; then
         echo "Telegram Transparent Proxy: RUNNING (PID $tg_pid)"
+    elif pidof tg-ws-proxy tg-transproxy >/dev/null 2>&1; then
+        echo "Telegram Transparent Proxy: RUNNING (PID $(pidof tg-ws-proxy tg-transproxy))"
     else
         echo "Telegram Transparent Proxy: STOPPED"
     fi
 
-    local adb_rules=$(wc -l < /tmp/dnsmasq.d/runet-fix-adblock.conf 2>/dev/null || echo "0")
+    local adb_rules="0"
+    [ -f /tmp/dnsmasq.d/runet-fix-adblock.conf ] && adb_rules=$(wc -l < /tmp/dnsmasq.d/runet-fix-adblock.conf 2>/dev/null || echo "0")
     echo "Adblock Rules in dnsmasq: $adb_rules domains blocked"
     echo "======================================"
 }
