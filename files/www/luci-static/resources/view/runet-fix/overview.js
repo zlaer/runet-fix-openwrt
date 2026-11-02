@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require form';
+'require uci';
 'require rpc';
 'require fs';
 'require ui';
@@ -152,6 +153,7 @@ var I18N = {
 return view.extend({
 	load: function() {
 		return Promise.all([
+			uci.load('runet-fix'),
 			callServiceList('runet-fix'),
 			fs.read('/tmp/runet-fix-adblock.count').then(function(res) {
 				return parseInt((res || '').trim()) || 0;
@@ -161,17 +163,9 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.1.0';
-			}).catch(function() { return '1.1.0'; })
+				return (res || '').trim() || '1.4.0';
+			}).catch(function() { return '1.4.0'; })
 		]);
-	},
-
-	handleSaveApply: function(ev, mode) {
-		return this.handleSave(ev).then(function() {
-			return ui.changes.apply(mode == '0');
-		}).then(function() {
-			return fs.exec('/usr/bin/runet-fix', ['restart']);
-		});
 	},
 
 	render: function(data) {
@@ -179,8 +173,8 @@ return view.extend({
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
 		var t = I18N[curLang];
 
-		var serviceData = data[0] || {};
-		var adblockRules = data[1] || 0;
+		var serviceData = data[1] || {};
+		var adblockRules = data[2] || 0;
 
 		// Extract instances from procd
 		var instances = (serviceData['runet-fix'] && serviceData['runet-fix'].instances) ? serviceData['runet-fix'].instances : {};
@@ -192,7 +186,7 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[2] || '1.1.0';
+		var currentVersion = data[3] || '1.4.0';
 
 		// Attach global window handlers with closures to fs and translations
 		window.setRunetFixLang = function(lang) {

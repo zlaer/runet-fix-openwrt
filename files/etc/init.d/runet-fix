@@ -360,6 +360,7 @@ reload_service() {
 
 service_triggers() {
     procd_add_reload_trigger "runet-fix"
+    procd_add_config_trigger "config.change" "runet-fix" /etc/init.d/runet-fix reload
 }
 
 extra_command "update_adblock" "Fetch and generate latest adblock rules"

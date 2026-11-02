@@ -72,14 +72,6 @@ return view.extend({
 		return uci.load('runet-fix');
 	},
 
-	handleSaveApply: function(ev, mode) {
-		return this.handleSave(ev).then(function() {
-			return ui.changes.apply(mode == '0');
-		}).then(function() {
-			return fs.exec('/usr/bin/runet-fix', ['restart']);
-		});
-	},
-
 	render: function() {
 		var curLang = localStorage.getItem('runet_fix_lang') || 'ru';
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';

@@ -74,6 +74,7 @@ var I18N = {
 return view.extend({
 	load: function() {
 		return Promise.all([
+			uci.load('runet-fix'),
 			fs.read('/usr/share/runet-fix/lists/adblock-whitelist.txt').catch(function() { return ''; }),
 			fs.read('/usr/share/runet-fix/lists/adblock-blacklist.txt').catch(function() { return ''; }),
 			fs.read('/tmp/runet-fix-adblock.count').then(function(res) {
@@ -86,22 +87,14 @@ return view.extend({
 		]);
 	},
 
-	handleSaveApply: function(ev, mode) {
-		return this.handleSave(ev).then(function() {
-			return ui.changes.apply(mode == '0');
-		}).then(function() {
-			return fs.exec('/usr/bin/runet-fix', ['restart']);
-		});
-	},
-
 	render: function(data) {
 		var curLang = localStorage.getItem('runet_fix_lang') || 'ru';
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
 		var t = I18N[curLang];
 
-		var whitelistContent = data[0] || '';
-		var blacklistContent = data[1] || '';
-		var totalBlocked = data[2] || 0;
+		var whitelistContent = data[1] || '';
+		var blacklistContent = data[2] || '';
+		var totalBlocked = data[3] || 0;
 
 		window.setRunetFixLang = function(lang) {
 			localStorage.setItem('runet_fix_lang', lang);

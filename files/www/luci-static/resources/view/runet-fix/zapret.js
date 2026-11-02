@@ -76,17 +76,10 @@ var I18N = {
 return view.extend({
 	load: function() {
 		return Promise.all([
+			uci.load('runet-fix'),
 			fs.read('/usr/share/runet-fix/lists/zapret-hosts.txt').catch(function() { return ''; }),
 			fs.read('/usr/share/runet-fix/lists/zapret-exclude.txt').catch(function() { return ''; })
 		]);
-	},
-
-	handleSaveApply: function(ev, mode) {
-		return this.handleSave(ev).then(function() {
-			return ui.changes.apply(mode == '0');
-		}).then(function() {
-			return fs.exec('/usr/bin/runet-fix', ['restart']);
-		});
 	},
 
 	render: function(data) {
@@ -94,8 +87,8 @@ return view.extend({
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
 		var t = I18N[curLang];
 
-		var hostlistContent = data[0] || '';
-		var excludelistContent = data[1] || '';
+		var hostlistContent = data[1] || '';
+		var excludelistContent = data[2] || '';
 
 		window.setRunetFixLang = function(lang) {
 			localStorage.setItem('runet_fix_lang', lang);
