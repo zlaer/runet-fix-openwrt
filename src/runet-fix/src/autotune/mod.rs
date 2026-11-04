@@ -87,6 +87,15 @@ fn wait_queue_released(qnum: &str) {
     }
 }
 
+/// Stop only the procd-managed zapret instance, keeping firewall rules intact.
+/// Removing the whole service would also drop the nft/iptables rules that send
+/// traffic to the queue, so the candidate probes would bypass DPI entirely.
+fn stop_zapret_instance() {
+    let _ = Command::new("ubus")
+        .args(["call", "service", "delete", r#"{"name":"runet-fix","instance":"zapret"}"#])
+        .output();
+}
+
 fn spawn_candidate_nfqws(nfq_bin: &str, preset: &str, qnum: &str) -> Option<Child> {
     let bin_dir = "/usr/share/runet-fix/bin";
     let exclude = "/usr/share/runet-fix/lists/zapret-exclude.txt";
@@ -175,9 +184,10 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut best_score: u64 = 999999;
     let mut results: Vec<PresetScore> = Vec::new();
 
-    // The procd instance owns the queue; stop it once before probing candidates.
+    // The procd instance owns the queue; remove just that instance so the
+    // firewall keeps redirecting traffic to NFQUEUE for our probe candidates.
     if nfq_bin.is_some() {
-        let _ = Command::new("/etc/init.d/runet-fix").arg("stop").output();
+        stop_zapret_instance();
         wait_queue_released(&qnum);
     }
 
@@ -241,17 +251,18 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Apply or restore
+    let service_action = if nfq_bin.is_some() { "start" } else { "restart" };
     if do_apply && !best_preset.is_empty() {
         uci::set("runet-fix.zapret.preset", &best_preset);
         uci::commit("runet-fix");
-        let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
+        let _ = Command::new("/etc/init.d/runet-fix").arg(service_action).output();
         if !is_json {
             println!(">>> Best preset '{}' applied to UCI configuration!", best_preset);
         }
     } else {
         uci::set("runet-fix.zapret.preset", &orig_preset);
         uci::commit("runet-fix");
-        let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
+        let _ = Command::new("/etc/init.d/runet-fix").arg(service_action).output();
     }
 
     if is_json {
