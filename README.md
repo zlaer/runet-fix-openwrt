@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.4.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.4.1-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]

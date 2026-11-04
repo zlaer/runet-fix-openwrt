@@ -30,7 +30,7 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
         let mut tls_stream = connector.connect(server_name, stream).await?;
 
         let request = format!(
-            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/1.4.0\r\nConnection: close\r\n\r\n",
+            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/1.4.1\r\nConnection: close\r\n\r\n",
             host
         );
         tls_stream.write_all(request.as_bytes()).await?;

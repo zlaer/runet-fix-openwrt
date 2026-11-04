@@ -1,10 +1,13 @@
 pub mod prober;
 
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
 use crate::os::uci;
 use self::prober::probe_https;
+
+const LOCK_DIR: &str = "/var/lock/runet-fix-autotune";
+const NFQUEUE_TABLE: &str = "/proc/net/netfilter/nfnetlink_queue";
 
 pub struct PresetScore {
     pub preset: String,
@@ -29,29 +32,98 @@ fn find_nfqws() -> Option<String> {
     None
 }
 
-fn spawn_candidate_nfqws(nfq_bin: &str, preset: &str, qnum: &str) {
+/// Simple directory lock so two autotune runs cannot fight over the same NFQUEUE.
+struct AutotuneLock;
+
+impl AutotuneLock {
+    /// Returns Err(pid) when another live instance owns the lock.
+    fn acquire() -> Result<Self, String> {
+        let path = std::path::Path::new(LOCK_DIR);
+        if path.exists() {
+            let pid = std::fs::read_to_string(path.join("pid"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            if !pid.is_empty() && std::path::Path::new(&format!("/proc/{}", pid)).exists() {
+                return Err(pid);
+            }
+            // Stale lock (owner died) - drop it and take over.
+            let _ = std::fs::remove_dir_all(path);
+        }
+        std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        std::fs::write(path.join("pid"), std::process::id().to_string()).map_err(|e| e.to_string())?;
+        Ok(AutotuneLock)
+    }
+}
+
+impl Drop for AutotuneLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(LOCK_DIR);
+    }
+}
+
+/// True while some line of nfnetlink_queue still belongs to `qnum`.
+fn queue_busy(qnum: &str) -> bool {
+    let data = match std::fs::read_to_string(NFQUEUE_TABLE) {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+    for line in data.lines().skip(1) {
+        if let Some(first) = line.split_whitespace().next() {
+            if first == qnum {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Wait (max ~3s) until the queue is released after the child died.
+fn wait_queue_released(qnum: &str) {
+    for _ in 0..60 {
+        if !queue_busy(qnum) {
+            return;
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn spawn_candidate_nfqws(nfq_bin: &str, preset: &str, qnum: &str) -> Option<Child> {
     let bin_dir = "/usr/share/runet-fix/bin";
     let exclude = "/usr/share/runet-fix/lists/zapret-exclude.txt";
     let desync = crate::zapret::get_zapret_args(preset, None);
 
-    let mut args = format!("--qnum={} --filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11", qnum);
+    let mut args: Vec<String> = vec![
+        format!("--qnum={}", qnum),
+        "--filter-udp=443".to_string(),
+        "--dpi-desync=fake".to_string(),
+        "--dpi-desync-repeats=11".to_string(),
+    ];
     let quic_bin = format!("{}/quic_initial_www_google_com.bin", bin_dir);
     if std::path::Path::new(&quic_bin).exists() {
-        args.push_str(&format!(" --dpi-desync-fake-quic={}", quic_bin));
+        args.push(format!("--dpi-desync-fake-quic={}", quic_bin));
     }
 
-    args.push_str(&format!(" --new --filter-tcp=80,443 {}", desync));
+    args.push("--new".to_string());
+    args.push("--filter-tcp=80,443".to_string());
+    for part in desync.split_whitespace() {
+        args.push(part.to_string());
+    }
 
     if std::path::Path::new(exclude).exists() {
         if let Ok(metadata) = std::fs::metadata(exclude) {
             if metadata.len() > 0 {
-                args.push_str(&format!(" --hostlist-exclude={}", exclude));
+                args.push(format!("--hostlist-exclude={}", exclude));
             }
         }
     }
 
-    let cmd = format!("killall -9 nfqws nfqws2 2>/dev/null; {} {} --daemon", nfq_bin, args);
-    let _ = Command::new("sh").arg("-c").arg(&cmd).output();
+    Command::new(nfq_bin)
+        .args(&args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .ok()
 }
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -65,6 +137,18 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             do_apply = true;
         }
     }
+
+    let _lock = match AutotuneLock::acquire() {
+        Ok(lock) => lock,
+        Err(_pid) => {
+            if is_json {
+                println!("{{\"error\":\"autotune already running\"}}");
+            } else {
+                println!("Autotune is already running (lock: {}). Aborting.", LOCK_DIR);
+            }
+            return Ok(());
+        }
+    };
 
     let orig_preset = uci::get("runet-fix.zapret.preset").unwrap_or_else(|| "youtube_4k".to_string());
     let qnum = uci::get("runet-fix.zapret.qnum").unwrap_or_else(|| "200".to_string());
@@ -91,20 +175,28 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let mut best_score: u64 = 999999;
     let mut results: Vec<PresetScore> = Vec::new();
 
+    // The procd instance owns the queue; stop it once before probing candidates.
+    if nfq_bin.is_some() {
+        let _ = Command::new("/etc/init.d/runet-fix").arg("stop").output();
+        wait_queue_released(&qnum);
+    }
+
     for p in candidates {
         if !is_json {
             print!("Testing preset '{}'... ", p);
             let _ = std::io::Write::flush(&mut std::io::stdout());
         }
 
-        if let Some(ref bin) = nfq_bin {
-            spawn_candidate_nfqws(bin, p, &qnum);
+        let mut child = if let Some(ref bin) = nfq_bin {
+            let c = spawn_candidate_nfqws(bin, p, &qnum);
             thread::sleep(Duration::from_millis(60));
+            c
         } else {
             uci::set("runet-fix.zapret.preset", p);
             let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
             thread::sleep(Duration::from_secs(1));
-        }
+            None
+        };
 
         let (yt, dc) = runtime.block_on(async {
             tokio::join!(
@@ -112,6 +204,14 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                 probe_https("gateway.discord.gg", 443, 1500)
             )
         });
+
+        if let Some(ref mut c) = child {
+            let _ = c.kill();
+            let _ = c.wait();
+        }
+        if nfq_bin.is_some() {
+            wait_queue_released(&qnum);
+        }
 
         let mut score: u64 = 999999;
         if yt.success && yt.status_code != "000" {

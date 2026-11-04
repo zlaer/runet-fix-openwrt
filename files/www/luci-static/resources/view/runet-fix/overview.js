@@ -163,8 +163,8 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.4.0';
-			}).catch(function() { return '1.4.0'; })
+				return (res || '').trim() || '1.4.1';
+			}).catch(function() { return '1.4.1'; })
 		]);
 	},
 
@@ -186,7 +186,7 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.4.0';
+		var currentVersion = data[3] || '1.4.1';
 
 		// Attach global window handlers with closures to fs and translations
 		window.setRunetFixLang = function(lang) {

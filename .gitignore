@@ -2,6 +2,7 @@
 /bin/
 build_dir/
 staging_dir/
+target/
 *.ipk
 *.apk
 *.o

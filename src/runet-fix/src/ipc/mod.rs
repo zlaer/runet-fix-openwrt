@@ -68,7 +68,7 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
                             .unwrap_or_else(|| "youtube_4k".to_string());
 
                         format!(
-                            "{{\"status\":\"ok\",\"version\":\"1.4.0\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
+                            "{{\"status\":\"ok\",\"version\":\"1.4.1\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
                             uptime, active, total, hits, misses, adb_rules, preset
                         )
                     }

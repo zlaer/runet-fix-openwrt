@@ -8,7 +8,7 @@ mod zapret;
 
 use std::process::Command;
 
-const VERSION: &str = "1.4.0";
+const VERSION: &str = "1.4.1";
 
 struct SimpleLogger;
 static LOGGER: SimpleLogger = SimpleLogger;
