@@ -153,6 +153,13 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
     writer.flush()?;
 
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(CONF_FILE, fs::Permissions::from_mode(0o644));
+        let _ = fs::set_permissions(COUNT_FILE, fs::Permissions::from_mode(0o644));
+    }
+
     // Save count file for LuCI dashboard
     let _ = fs::write(COUNT_FILE, format!("{}\n", total));
 

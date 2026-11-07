@@ -321,6 +321,7 @@ EOF
     if [ "$filter_aaaa" = "1" ]; then
         echo "filter-aaaa" >> /tmp/dnsmasq.d/runet-fix-filter.conf
     fi
+    chmod 644 /tmp/dnsmasq.d/runet-fix-*.conf 2>/dev/null || true
 
     local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
     [ -z "$adb_enabled" ] && adb_enabled="1" 

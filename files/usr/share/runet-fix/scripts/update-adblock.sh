@@ -181,6 +181,7 @@ echo "[runet-fix:adblock] Total unique ad domains blocked: $TOTAL"
 # Format into dnsmasq address=/domain/ syntax (redirects to 0.0.0.0 and ::)
 awk '{ print "address=/" $0 "/" }' "$TEMP_DOMAINS" > "$CONF_FILE"
 echo "$TOTAL" > /tmp/runet-fix-adblock.count
+chmod 644 "$CONF_FILE" /tmp/runet-fix-adblock.count 2>/dev/null || true
 
 rm -f "$TEMP_RAW" "$TEMP_DOMAINS"
 
