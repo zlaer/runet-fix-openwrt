@@ -34,6 +34,8 @@
 
 ## Веб-интерфейс в панели LuCI
 
+![Панель управления Runet-Fix в LuCI](docs/screenshot.jpg)
+
 Пакет включает современный веб-интерфейс на базе LuCI JavaScript API:
 
 * **Обзор (Overview)**:
