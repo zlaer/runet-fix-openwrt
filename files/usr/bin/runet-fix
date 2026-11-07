@@ -3,7 +3,7 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.4.2"
+CURRENT_VERSION="1.5.0"
 [ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
 
 REPO_USER="zlaer"
@@ -16,15 +16,12 @@ safe_download() {
     local url="$1"
     local output="$2"
     local timeout="${3:-30}"
-    if curl -s -f -L -m "$timeout" "$url" -o "$output" 2>/dev/null; then
-        return 0
-    fi
-    curl -s -f -k -L -m "$timeout" "$url" -o "$output"
+    curl -s -f -L -m "$timeout" "$url" -o "$output"
 }
 
 if [ -x /usr/bin/runet-fix-core ]; then
     case "$1" in
-        daemon|proxy|adblock|update-adblock|autotune|test|zapret-args|status)
+        daemon|proxy|adblock|update-adblock|update_adblock|autotune|test|zapret-args|status)
             exec /usr/bin/runet-fix-core "$@"
             ;;
     esac
@@ -51,11 +48,11 @@ case "$1" in
         fi
         ;;
     check-update|check_update)
-        raw_res=$(curl -s -k -m 5 "$GITHUB_RAW/version" 2>/dev/null | tr -d '\r\n ')
+        raw_res=$(curl -s -f -m 5 "$GITHUB_RAW/version" 2>/dev/null | tr -d '\r\n ')
         if echo "$raw_res" | grep -Eq '^[vV]?[0-9]+(\.[0-9]+)+$'; then
             latest="$raw_res"
         else
-            api_res=$(curl -s -k -m 5 "$GITHUB_API" 2>/dev/null | grep '"tag_name":' | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d 'v\r\n ')
+            api_res=$(curl -s -f -m 5 "$GITHUB_API" 2>/dev/null | grep '"tag_name":' | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' | tr -d 'v\r\n ')
             if echo "$api_res" | grep -Eq '^[vV]?[0-9]+(\.[0-9]+)+$'; then
                 latest="$api_res"
             else
@@ -209,7 +206,7 @@ EOF
         rm -rf "$TMP_DIR"
         exit 0
         ;;
-    adblock|update-adblock)
+    adblock|update-adblock|update_adblock)
         /usr/share/runet-fix/scripts/update-adblock.sh
         ;;
     firewall)
@@ -230,13 +227,13 @@ EOF
         ;;
     test)
         if [ "$2" = "--json" ]; then
-            yt_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
+            yt_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
             yt_code=$(echo "$yt_raw" | cut -d: -f1)
             yt_time=$(echo "$yt_raw" | cut -d: -f2)
             yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }")
             yt_ok=0; [ "$yt_code" != "000" ] && [ -n "$yt_code" ] && yt_ok=1
 
-            dc_raw=$(curl -s -k -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
+            dc_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
             dc_code=$(echo "$dc_raw" | cut -d: -f1)
             dc_time=$(echo "$dc_raw" | cut -d: -f2)
             dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }")
@@ -275,11 +272,11 @@ EOF
         if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then echo "OK (Blocked)"; else echo "FAIL (Allowed)"; fi
 
         echo -n "Testing YouTube HTTPS connection (port 443)... "
-        yt_test=$(curl -s -k -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "FAIL")
+        yt_test=$(curl -s -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "FAIL")
         echo "$yt_test"
 
         echo -n "Testing Discord Gateway (gateway.discord.gg:443)... "
-        dc_test=$(curl -s -k -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "FAIL")
+        dc_test=$(curl -s -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "FAIL")
         echo "$dc_test"
 
         echo -n "Testing Telegram local transparent proxy daemon (127.0.0.1:1443)... "
@@ -291,7 +288,7 @@ EOF
         ;;
     *)
         echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"
-        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|firewall|test|autotune|log|uninstall}"
+        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|update_adblock|firewall|test|autotune|log|uninstall}"
         echo "       runet-fix autotune [--json] [--apply]"
         echo "       runet-fix version [--json]"
         echo "       runet-fix check-update [--json]"

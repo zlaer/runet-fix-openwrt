@@ -14,8 +14,8 @@ use tokio::net::TcpListener;
 use self::bridge::bridge_stream;
 pub use self::config::AppConfig;
 use self::handshake::{
-    build_crypto_context, generate_relay_init, parse_client_handshake,
-    HANDSHAKE_LEN, PROTO_TAG_ABRIDGED, PROTO_TAG_INTERMEDIATE,
+    build_crypto_context, generate_relay_init, parse_client_handshake, HANDSHAKE_LEN,
+    PROTO_TAG_ABRIDGED, PROTO_TAG_INTERMEDIATE,
 };
 use self::orig_dst::{dc_from_ip, get_original_dst};
 use self::pool::WsConnectionPool;
@@ -129,7 +129,10 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             // 3. Try transparent mode handshake first, then fallback to configured MTProxy secret
             let (parsed, secret_used) = match parse_client_handshake(&handshake_buf, None) {
                 Some(p) => (p, None),
-                None => match secret_ref.as_ref().and_then(|s| parse_client_handshake(&handshake_buf, Some(s))) {
+                None => match secret_ref
+                    .as_ref()
+                    .and_then(|s| parse_client_handshake(&handshake_buf, Some(s)))
+                {
                     Some(p) => (p, secret_ref.as_ref().map(|v| v.as_slice())),
                     None => {
                         log::warn!(
@@ -167,16 +170,29 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             let mut ws = match pool_ref.take(dc_id).await {
                 Some(conn) => {
                     POOL_HITS.fetch_add(1, Ordering::Relaxed);
-                    log::debug!("[{}] Reusing warm WS connection from pool for DC{}", label, dc_id);
+                    log::debug!(
+                        "[{}] Reusing warm WS connection from pool for DC{}",
+                        label,
+                        dc_id
+                    );
                     conn
                 }
                 None => {
                     POOL_MISSES.fetch_add(1, Ordering::Relaxed);
-                    log::debug!("[{}] Pool empty, opening fresh WS connection for DC{}", label, dc_id);
+                    log::debug!(
+                        "[{}] Pool empty, opening fresh WS connection for DC{}",
+                        label,
+                        dc_id
+                    );
                     match pool_ref.create_connection(dc_id).await {
                         Ok(conn) => conn,
                         Err(e) => {
-                            log::error!("[{}] Failed to connect upstream WS for DC{}: {}", label, dc_id, e);
+                            log::error!(
+                                "[{}] Failed to connect upstream WS for DC{}: {}",
+                                label,
+                                dc_id,
+                                e
+                            );
                             return;
                         }
                     }
@@ -191,12 +207,8 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             }
 
             // 6. Build complete cryptographic context
-            let ctx = build_crypto_context(
-                &parsed.client_dec_prekey_iv,
-                secret_used,
-                tg_enc,
-                tg_dec,
-            );
+            let ctx =
+                build_crypto_context(&parsed.client_dec_prekey_iv, secret_used, tg_enc, tg_dec);
 
             // 7. Track session and start bi-directional streaming bridge
             ACTIVE_SESSIONS.fetch_add(1, Ordering::Relaxed);
@@ -205,15 +217,8 @@ async fn async_main(cfg: AppConfig) -> io::Result<()> {
             let _guard = SessionGuard;
 
             let (client_read, client_write) = client_stream.into_split();
-            if let Err(e) = bridge_stream(
-                client_read,
-                client_write,
-                ws,
-                ctx,
-                parsed.proto_tag,
-                &label,
-            )
-            .await
+            if let Err(e) =
+                bridge_stream(client_read, client_write, ws, ctx, parsed.proto_tag, &label).await
             {
                 log::debug!("[{}] Session ended: {}", label, e);
             }

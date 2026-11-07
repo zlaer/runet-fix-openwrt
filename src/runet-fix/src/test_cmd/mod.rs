@@ -1,7 +1,7 @@
+use crate::autotune::prober::probe_https;
 use std::fs;
 use std::net::TcpStream;
 use std::process::Command;
-use crate::autotune::prober::probe_https;
 
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let is_json = args.iter().any(|a| a == "--json");
@@ -16,11 +16,23 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         (yt, dc)
     });
 
-    let yt_ok = if yt.success && yt.status_code != "000" { 1 } else { 0 };
-    let dc_ok = if dc.success && dc.status_code != "000" { 1 } else { 0 };
+    let yt_ok = if yt.success && yt.status_code != "000" {
+        1
+    } else {
+        0
+    };
+    let dc_ok = if dc.success && dc.status_code != "000" {
+        1
+    } else {
+        0
+    };
 
     // Check Telegram local port 1443
-    let tg_ok = if TcpStream::connect("127.0.0.1:1443").is_ok() { 1 } else { 0 };
+    let tg_ok = if TcpStream::connect("127.0.0.1:1443").is_ok() {
+        1
+    } else {
+        0
+    };
 
     // Read stats JSON
     let tg_stats = fs::read_to_string("/tmp/tg-ws-proxy-stats.json")
@@ -29,16 +41,32 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         .to_string();
 
     // DNS check via nslookup
-    let dns_ok = match Command::new("nslookup").args(&["google.com", "127.0.0.1"]).output() {
-        Ok(out) => if out.status.success() { 1 } else { 0 },
+    let dns_ok = match Command::new("nslookup")
+        .args(["google.com", "127.0.0.1"])
+        .output()
+    {
+        Ok(out) => {
+            if out.status.success() {
+                1
+            } else {
+                0
+            }
+        }
         Err(_) => 0,
     };
 
     // Adblock check via nslookup
-    let ad_ok = match Command::new("nslookup").args(&["ad.ae.doubleclick.net", "127.0.0.1"]).output() {
+    let ad_ok = match Command::new("nslookup")
+        .args(["ad.ae.doubleclick.net", "127.0.0.1"])
+        .output()
+    {
         Ok(out) => {
             let s = String::from_utf8_lossy(&out.stdout);
-            if s.contains("NXDOMAIN") || s.contains("0.0.0.0") { 1 } else { 0 }
+            if s.contains("NXDOMAIN") || s.contains("0.0.0.0") {
+                1
+            } else {
+                0
+            }
         }
         Err(_) => 0,
     };
@@ -56,10 +84,18 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("=== [runet-fix Connectivity Diagnostics] ===");
         print!("Checking DNS resolution (google.com)... ");
-        if dns_ok == 1 { println!("OK"); } else { println!("FAIL"); }
+        if dns_ok == 1 {
+            println!("OK");
+        } else {
+            println!("FAIL");
+        }
 
         print!("Checking Adblock NXDOMAIN (ad.ae.doubleclick.net)... ");
-        if ad_ok == 1 { println!("OK (Blocked)"); } else { println!("FAIL (Allowed)"); }
+        if ad_ok == 1 {
+            println!("OK (Blocked)");
+        } else {
+            println!("FAIL (Allowed)");
+        }
 
         print!("Testing YouTube HTTPS connection (port 443)... ");
         if yt_ok == 1 {
@@ -76,7 +112,11 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         print!("Testing Telegram local transparent proxy daemon (127.0.0.1:1443)... ");
-        if tg_ok == 1 { println!("OK (Listening)"); } else { println!("FAIL (Stopped)"); }
+        if tg_ok == 1 {
+            println!("OK (Listening)");
+        } else {
+            println!("FAIL (Stopped)");
+        }
         println!("=============================================");
     }
 

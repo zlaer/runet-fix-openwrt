@@ -2,6 +2,10 @@
 use std::sync::Arc;
 
 #[cfg(unix)]
+use crate::proxy::pool::WsConnectionPool;
+#[cfg(unix)]
+use crate::proxy::{ACTIVE_SESSIONS, POOL_HITS, POOL_MISSES, TOTAL_SESSIONS};
+#[cfg(unix)]
 use std::fs;
 #[cfg(unix)]
 use std::path::Path;
@@ -11,10 +15,6 @@ use std::sync::atomic::Ordering;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
 use tokio::net::UnixListener;
-#[cfg(unix)]
-use crate::proxy::pool::WsConnectionPool;
-#[cfg(unix)]
-use crate::proxy::{ACTIVE_SESSIONS, POOL_HITS, POOL_MISSES, TOTAL_SESSIONS};
 
 #[cfg(unix)]
 pub const IPC_SOCKET_PATH: &str = "/var/run/runet-fix.sock";
@@ -70,8 +70,15 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
                             .unwrap_or_else(|| "youtube_4k".to_string());
 
                         format!(
-                            "{{\"status\":\"ok\",\"version\":\"1.4.2\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
-                            uptime, active, total, hits, misses, adb_rules, preset
+                            "{{\"status\":\"ok\",\"version\":\"{}\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
+                            env!("CARGO_PKG_VERSION"),
+                            uptime,
+                            active,
+                            total,
+                            hits,
+                            misses,
+                            adb_rules,
+                            preset
                         )
                     }
                     _ => "{\"status\":\"error\",\"message\":\"unknown command\"}\n".to_string(),
@@ -95,8 +102,12 @@ pub fn query_daemon_socket(cmd: &str) -> Option<String> {
         use std::time::Duration;
 
         let mut stream = StdUnixStream::connect(IPC_SOCKET_PATH).ok()?;
-        stream.set_read_timeout(Some(Duration::from_millis(500))).ok()?;
-        stream.set_write_timeout(Some(Duration::from_millis(500))).ok()?;
+        stream
+            .set_read_timeout(Some(Duration::from_millis(500)))
+            .ok()?;
+        stream
+            .set_write_timeout(Some(Duration::from_millis(500)))
+            .ok()?;
 
         stream.write_all(format!("{}\n", cmd).as_bytes()).ok()?;
         stream.flush().ok()?;

@@ -9,11 +9,11 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
-use crate::os::meminfo::get_available_ram_kb;
-use crate::os::uci;
 use self::fetcher::{fetch_url_lines, read_local_file_lines};
 use self::parser::extract_domain;
 use self::whitelist::WhitelistMatcher;
+use crate::os::meminfo::get_available_ram_kb;
+use crate::os::uci;
 
 const CONF_DIR: &str = "/tmp/dnsmasq.d";
 const CONF_FILE: &str = "/tmp/dnsmasq.d/runet-fix-adblock.conf";
@@ -33,9 +33,11 @@ const NOCOIN_MINERS: &str =
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let start_time = Instant::now();
 
-    let mut profile = uci::get("runet-fix.adblock.profile").unwrap_or_else(|| "standard".to_string());
+    let mut profile =
+        uci::get("runet-fix.adblock.profile").unwrap_or_else(|| "standard".to_string());
     let enabled = uci::get("runet-fix.adblock.enabled").unwrap_or_else(|| "1".to_string()) == "1";
-    let enable_ru = uci::get("runet-fix.adblock.enable_ru").unwrap_or_else(|| "1".to_string()) == "1";
+    let enable_ru =
+        uci::get("runet-fix.adblock.enable_ru").unwrap_or_else(|| "1".to_string()) == "1";
 
     // CLI overrides
     let mut i = 0;
@@ -83,7 +85,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // 2. Fetch Base Adblock List (StevenBlack) unless Micro profile
     if profile != "micro" {
         println!("[runet-fix:adblock] Fetching StevenBlack base adblock list...");
-        fetch_url_lines(STEVENBLACK_UNIFIED, |line| {
+        let _ = fetch_url_lines(STEVENBLACK_UNIFIED, |line| {
             if let Some(domain) = extract_domain(line) {
                 if !whitelist.is_whitelisted(&domain) {
                     blocked_domains.insert(domain);
@@ -97,7 +99,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // 3. Russian Filters
     if enable_ru {
         println!("[runet-fix:adblock] Adding Russian AdList & AdGuard filters...");
-        fetch_url_lines(ADGUARD_RU_FIRSTPARTY, |line| {
+        let _ = fetch_url_lines(ADGUARD_RU_FIRSTPARTY, |line| {
             if let Some(domain) = extract_domain(line) {
                 if !whitelist.is_whitelisted(&domain) {
                     blocked_domains.insert(domain);
@@ -119,7 +121,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     // 4. Aggressive profile additions (Crypto miners)
     if profile == "aggressive" {
         println!("[runet-fix:adblock] Adding Anti-Coinminer protection...");
-        fetch_url_lines(NOCOIN_MINERS, |line| {
+        let _ = fetch_url_lines(NOCOIN_MINERS, |line| {
             if let Some(domain) = extract_domain(line) {
                 if !whitelist.is_whitelisted(&domain) {
                     blocked_domains.insert(domain);
@@ -165,7 +167,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     // 7. Restart or notify dnsmasq
     println!("[runet-fix:adblock] Notifying dnsmasq...");
-    let _ = Command::new("killall").args(&["-HUP", "dnsmasq"]).status();
+    let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
 
     let elapsed = start_time.elapsed();
     println!(

@@ -39,6 +39,7 @@ log = logging.getLogger('tg-mtproto-proxy')
 
 LISTENER_CHECK_INTERVAL = 5.0
 LISTENER_RESTART_DELAY = 1.0
+MAX_HTTP_BODY = 1024 * 1024  # 1 MiB upper bound to prevent OOM
 cf_h2_pool: Optional[CfH2Pool] = None
 
 
@@ -155,15 +156,45 @@ async def _handle_http_api(reader: asyncio.StreamReader, writer: asyncio.StreamW
             return
 
         content_len = 0
+        invalid_content_length = False
         for line in headers_raw.split('\r\n'):
             if line.lower().startswith('content-length:'):
+                val = line.split(':', 1)[1].strip()
                 try:
-                    content_len = int(line.split(':', 1)[1].strip())
+                    content_len = int(val)
+                    if content_len < 0:
+                        invalid_content_length = True
                 except ValueError:
-                    pass
+                    invalid_content_length = True
                 break
 
-        body = bytearray(body_start)
+        if invalid_content_length:
+            resp_400 = (
+                f"HTTP/1.1 400 Bad Request\r\n"
+                f"Server: nginx\r\n"
+                f"Date: {date_str}\r\n"
+                f"Content-Length: 0\r\n"
+                f"Connection: close\r\n"
+                f"\r\n"
+            ).encode('ascii')
+            writer.write(resp_400)
+            await writer.drain()
+            return
+
+        if content_len > MAX_HTTP_BODY:
+            resp_413 = (
+                f"HTTP/1.1 413 Payload Too Large\r\n"
+                f"Server: nginx\r\n"
+                f"Date: {date_str}\r\n"
+                f"Content-Length: 0\r\n"
+                f"Connection: close\r\n"
+                f"\r\n"
+            ).encode('ascii')
+            writer.write(resp_413)
+            await writer.drain()
+            return
+
+        body = bytearray(body_start[:content_len])
         while len(body) < content_len:
             remaining = content_len - len(body)
             chunk = await asyncio.wait_for(reader.read(min(remaining, 65536)), timeout=5.0)
@@ -888,7 +919,24 @@ def main():
     root.addHandler(console)
 
     if args.log_file:
-        from utils.logging_setup import build_log_handler
+        try:
+            from .utils.logging_setup import build_log_handler
+        except (ImportError, ValueError):
+            try:
+                from utils.logging_setup import build_log_handler
+            except ImportError:
+                from logging.handlers import RotatingFileHandler
+                def build_log_handler(lf, log_max_mb=5, backups=3):
+                    try:
+                        return RotatingFileHandler(
+                            lf,
+                            maxBytes=max(1, int(log_max_mb)) * 1024 * 1024,
+                            backupCount=int(backups),
+                            encoding='utf-8',
+                        )
+                    except Exception:
+                        return logging.FileHandler(lf, encoding='utf-8')
+
         fh = build_log_handler(
             args.log_file,
             log_max_mb=args.log_max_mb,

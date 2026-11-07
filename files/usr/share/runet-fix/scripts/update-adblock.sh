@@ -25,15 +25,29 @@ mkdir -p /usr/share/runet-fix/lists
 fetch_file() {
     local url="$1"
     local dest="$2"
-    if command -v curl >/dev/null 2>&1; then
-        curl -s -k -L --connect-timeout 8 --max-time 30 -o "$dest" "$url"
-    elif command -v uclient-fetch >/dev/null 2>&1; then
-        uclient-fetch -q --no-check-certificate -O "$dest" "$url"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q --no-check-certificate -O "$dest" "$url"
-    else
-        return 1
+    rm -f "$dest"
+
+    if command -v uclient-fetch >/dev/null 2>&1; then
+        if uclient-fetch -q -O "$dest" "$url" 2>/dev/null && [ -s "$dest" ]; then
+            return 0
+        fi
     fi
+
+    if command -v wget >/dev/null 2>&1; then
+        if wget -q -O "$dest" "$url" 2>/dev/null && [ -s "$dest" ]; then
+            return 0
+        fi
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        if curl -s -f -L --connect-timeout 8 --max-time 30 -o "$dest" "$url" 2>/dev/null && [ -s "$dest" ]; then
+            return 0
+        fi
+    fi
+
+    echo "[runet-fix:adblock] Error: Failed to fetch $url (TLS verification or network error)" >&2
+    rm -f "$dest"
+    return 1
 }
 
 echo "[runet-fix:adblock] Updating adblock lists..."

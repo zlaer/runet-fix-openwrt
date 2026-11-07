@@ -3,7 +3,7 @@ pub fn extract_domain(line: &str) -> Option<String> {
     let mut s = line.trim();
 
     // Strip comments (#, !, ;, [)
-    if let Some(pos) = s.find(|c| c == '#' || c == '!' || c == ';') {
+    if let Some(pos) = s.find(['#', '!', ';']) {
         s = s[..pos].trim();
     }
     if s.is_empty() || s.starts_with('[') {
@@ -85,9 +85,18 @@ mod tests {
 
     #[test]
     fn test_extract_domain() {
-        assert_eq!(extract_domain("0.0.0.0 doubleclick.net"), Some("doubleclick.net".to_string()));
-        assert_eq!(extract_domain("127.0.0.1 adservice.google.com # comment"), Some("adservice.google.com".to_string()));
-        assert_eq!(extract_domain("||an.yandex.ru^$third-party"), Some("an.yandex.ru".to_string()));
+        assert_eq!(
+            extract_domain("0.0.0.0 doubleclick.net"),
+            Some("doubleclick.net".to_string())
+        );
+        assert_eq!(
+            extract_domain("127.0.0.1 adservice.google.com # comment"),
+            Some("adservice.google.com".to_string())
+        );
+        assert_eq!(
+            extract_domain("||an.yandex.ru^$third-party"),
+            Some("an.yandex.ru".to_string())
+        );
         assert_eq!(extract_domain("! This is a comment"), None);
         assert_eq!(extract_domain("# Another comment"), None);
         assert_eq!(extract_domain("0.0.0.0 0.0.0.0"), None);

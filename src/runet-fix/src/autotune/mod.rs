@@ -1,10 +1,10 @@
 pub mod prober;
 
+use self::prober::probe_https;
+use crate::os::uci;
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::Duration;
-use crate::os::uci;
-use self::prober::probe_https;
 
 const LOCK_DIR: &str = "/var/lock/runet-fix-autotune";
 const NFQUEUE_TABLE: &str = "/proc/net/netfilter/nfnetlink_queue";
@@ -50,7 +50,8 @@ impl AutotuneLock {
             let _ = std::fs::remove_dir_all(path);
         }
         std::fs::create_dir_all(path).map_err(|e| e.to_string())?;
-        std::fs::write(path.join("pid"), std::process::id().to_string()).map_err(|e| e.to_string())?;
+        std::fs::write(path.join("pid"), std::process::id().to_string())
+            .map_err(|e| e.to_string())?;
         Ok(AutotuneLock)
     }
 }
@@ -92,7 +93,12 @@ fn wait_queue_released(qnum: &str) {
 /// traffic to the queue, so the candidate probes would bypass DPI entirely.
 fn stop_zapret_instance() {
     let _ = Command::new("ubus")
-        .args(["call", "service", "delete", r#"{"name":"runet-fix","instance":"zapret"}"#])
+        .args([
+            "call",
+            "service",
+            "delete",
+            r#"{"name":"runet-fix","instance":"zapret"}"#,
+        ])
         .output();
 }
 
@@ -153,13 +159,17 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             if is_json {
                 println!("{{\"error\":\"autotune already running\"}}");
             } else {
-                println!("Autotune is already running (lock: {}). Aborting.", LOCK_DIR);
+                println!(
+                    "Autotune is already running (lock: {}). Aborting.",
+                    LOCK_DIR
+                );
             }
             return Ok(());
         }
     };
 
-    let orig_preset = uci::get("runet-fix.zapret.preset").unwrap_or_else(|| "youtube_4k".to_string());
+    let orig_preset =
+        uci::get("runet-fix.zapret.preset").unwrap_or_else(|| "youtube_4k".to_string());
     let qnum = uci::get("runet-fix.zapret.qnum").unwrap_or_else(|| "200".to_string());
     let nfq_bin = find_nfqws();
 
@@ -203,7 +213,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
             c
         } else {
             uci::set("runet-fix.zapret.preset", p);
-            let _ = Command::new("/etc/init.d/runet-fix").arg("restart").output();
+            let _ = Command::new("/etc/init.d/runet-fix")
+                .arg("restart")
+                .output();
             thread::sleep(Duration::from_secs(1));
             None
         };
@@ -251,18 +263,29 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Apply or restore
-    let service_action = if nfq_bin.is_some() { "start" } else { "restart" };
+    let service_action = if nfq_bin.is_some() {
+        "start"
+    } else {
+        "restart"
+    };
     if do_apply && !best_preset.is_empty() {
         uci::set("runet-fix.zapret.preset", &best_preset);
         uci::commit("runet-fix");
-        let _ = Command::new("/etc/init.d/runet-fix").arg(service_action).output();
+        let _ = Command::new("/etc/init.d/runet-fix")
+            .arg(service_action)
+            .output();
         if !is_json {
-            println!(">>> Best preset '{}' applied to UCI configuration!", best_preset);
+            println!(
+                ">>> Best preset '{}' applied to UCI configuration!",
+                best_preset
+            );
         }
     } else {
         uci::set("runet-fix.zapret.preset", &orig_preset);
         uci::commit("runet-fix");
-        let _ = Command::new("/etc/init.d/runet-fix").arg(service_action).output();
+        let _ = Command::new("/etc/init.d/runet-fix")
+            .arg(service_action)
+            .output();
     }
 
     if is_json {
@@ -282,7 +305,10 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         );
     } else {
         println!("==========================================================");
-        println!("Recommended fastest preset: {} (score: {})", best_preset, best_score);
+        println!(
+            "Recommended fastest preset: {} (score: {})",
+            best_preset, best_score
+        );
         if !do_apply {
             println!("Run with --apply to automatically activate this preset.");
         }

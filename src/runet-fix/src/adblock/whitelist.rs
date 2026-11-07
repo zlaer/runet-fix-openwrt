@@ -18,9 +18,9 @@ impl WhitelistMatcher {
     pub fn load_from_file<P: AsRef<Path>>(&mut self, path: P) {
         if let Ok(file) = File::open(path) {
             let reader = BufReader::new(file);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 let trimmed = line.trim();
-                if let Some(pos) = trimmed.find(|c| c == '#' || c == '!' || c == ';') {
+                if let Some(pos) = trimmed.find(['#', '!', ';']) {
                     let d = trimmed[..pos].trim();
                     if !d.is_empty() {
                         self.domains.insert(d.to_ascii_lowercase());

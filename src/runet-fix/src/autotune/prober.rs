@@ -13,7 +13,9 @@ use crate::proxy::ws::RawWebSocket;
 static PROBE_TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
 
 fn get_probe_tls_config() -> Arc<ClientConfig> {
-    PROBE_TLS_CONFIG.get_or_init(RawWebSocket::create_tls_config).clone()
+    PROBE_TLS_CONFIG
+        .get_or_init(RawWebSocket::create_tls_config)
+        .clone()
 }
 
 pub struct ProbeResult {
@@ -33,21 +35,29 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
 
         let tls_cfg = get_probe_tls_config();
         let connector = TlsConnector::from(tls_cfg);
-        let server_name = ServerName::try_from(host.to_string())
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid SNI: {:?}", e)))?;
+        let server_name = ServerName::try_from(host.to_string()).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid SNI: {:?}", e),
+            )
+        })?;
 
         let mut tls_stream = connector.connect(server_name, stream).await?;
 
         let request = format!(
-            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/1.4.2\r\nConnection: close\r\n\r\n",
-            host
+            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/{}\r\nConnection: close\r\n\r\n",
+            host,
+            env!("CARGO_PKG_VERSION")
         );
         tls_stream.write_all(request.as_bytes()).await?;
 
         let mut buf = [0u8; 128];
         let n = tls_stream.read(&mut buf).await?;
         if n == 0 {
-            return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "empty response"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "empty response",
+            ));
         }
 
         let resp_str = String::from_utf8_lossy(&buf[..n]);
@@ -75,21 +85,21 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
             }
         }
         _ => {
-            // In case of TLS certificate validation error on router with skewed clock, fallback to curl
+            // In case Tokio probe fails, fallback to system curl (validating TLS)
             probe_via_curl(host, timeout_ms)
         }
     }
 }
 
-/// Fallback prober using router's curl utility with --insecure (-k).
+/// Fallback prober using router's curl utility.
 pub fn probe_via_curl(host: &str, timeout_ms: u64) -> ProbeResult {
     let url = format!("https://{}", host);
     let sec_str = format!("{:.1}", (timeout_ms as f64) / 1000.0);
 
     let output = Command::new("curl")
-        .args(&[
+        .args([
             "-s",
-            "-k",
+            "-f",
             "-m",
             &sec_str,
             "-w",

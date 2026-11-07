@@ -161,8 +161,8 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.4.2';
-			}).catch(function() { return '1.4.2'; }),
+				return (res || '').trim() || '1.5.0';
+			}).catch(function() { return '1.5.0'; }),
 			fs.read('/tmp/tg-ws-proxy-stats.json').then(function(res) {
 				try { return JSON.parse(res || '{}'); } catch(e) { return {}; }
 			}).catch(function() { return {}; })
@@ -187,7 +187,7 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.4.2';
+		var currentVersion = data[3] || '1.5.0';
 		var tgStats = data[4] || {};
 
 		// Attach global window handlers with closures to fs and translations
@@ -552,7 +552,7 @@ return view.extend({
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + (curLang === 'ru' ? 'Авто-подбор Zapret' : 'Zapret Autotune') + '</button> ' +
-				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
+				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update-adblock\')">' + t.btn_update_adblock + '</button> ' +
 				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
 				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
 				'<span style="font-size:13px;color:#888;font-weight:bold;">' + t.lang_label + '</span>' +

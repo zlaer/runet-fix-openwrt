@@ -38,14 +38,17 @@ pkg_install() {
     fi
 }
 
-# Safe TLS-first download with fallback for uncalibrated router clocks before NTP sync
+# Safe TLS download verifying certificates
 safe_download() {
     local url="$1"
     local output="$2"
-    if curl -s -f -L --connect-timeout 8 "$url" -o "$output" 2>/dev/null; then
+    if curl -s -f -L --connect-timeout 8 "$url" -o "$output"; then
         return 0
     fi
-    curl -s -f -k -L --connect-timeout 8 "$url" -o "$output"
+    echo "${RED}Error: Failed to securely download $url via TLS.${NC}" >&2
+    echo "${YELLOW}Hint: If TLS verification fails, please update certificates or check system time:${NC}" >&2
+    echo "  opkg update && opkg install ca-bundle ca-certificates" >&2
+    return 1
 }
 
 # Verify file against SHA256 checksum
@@ -146,22 +149,28 @@ if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
     ZAPRET_URL="https://github.com/bol-van/zapret/raw/master/binaries"
     case "$ARCH" in
         mips_24kc|mips)
-            curl -s -L -k "$ZAPRET_URL/mips/nfqws" -o /opt/zapret/nfq/nfqws || true
+            curl -s -f -L "$ZAPRET_URL/mips/nfqws" -o /opt/zapret/nfq/nfqws || true
             ;;
         mipsel_24kc|mipsel)
-            curl -s -L -k "$ZAPRET_URL/mipsle/nfqws" -o /opt/zapret/nfq/nfqws || true
+            curl -s -f -L "$ZAPRET_URL/mipsle/nfqws" -o /opt/zapret/nfq/nfqws || true
             ;;
         aarch64_cortex-a53|aarch64)
-            curl -s -L -k "$ZAPRET_URL/aarch64/nfqws" -o /opt/zapret/nfq/nfqws || true
+            curl -s -f -L "$ZAPRET_URL/aarch64/nfqws" -o /opt/zapret/nfq/nfqws || true
             ;;
         arm_cortex-a7*|arm_cortex-a9*|arm)
-            curl -s -L -k "$ZAPRET_URL/armhf/nfqws" -o /opt/zapret/nfq/nfqws || true
+            curl -s -f -L "$ZAPRET_URL/armhf/nfqws" -o /opt/zapret/nfq/nfqws || true
             ;;
         x86_64)
-            curl -s -L -k "$ZAPRET_URL/x86_64/nfqws" -o /opt/zapret/nfq/nfqws || true
+            curl -s -f -L "$ZAPRET_URL/x86_64/nfqws" -o /opt/zapret/nfq/nfqws || true
             ;;
     esac
-    chmod +x /opt/zapret/nfq/nfqws 2>/dev/null || true
+    # Only accept a non-empty ELF binary; never chmod an HTML error page.
+    if [ -s /opt/zapret/nfq/nfqws ] && [ "$(head -c 4 /opt/zapret/nfq/nfqws | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; then
+        chmod +x /opt/zapret/nfq/nfqws 2>/dev/null || true
+    else
+        rm -f /opt/zapret/nfq/nfqws
+        echo "${YELLOW}Warning: nfqws download failed or returned invalid data; skipping.${NC}" >&2
+    fi
 fi
 
 # Multi-arch Telegram and Rust Core setup
@@ -213,6 +222,13 @@ if [ -n "$TG_ARCH" ]; then
             sum_file="$REPO_DIR/prebuilt/SHA256SUMS"
         elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/SHA256SUMS" ]; then
             sum_file="$SRC/prebuilt/SHA256SUMS"
+        else
+            # Downloaded core: fetch the matching checksum list from the same source.
+            sum_file=$(mktemp /tmp/runet-fix-sums.XXXXXX 2>/dev/null) || sum_file=""
+            if [ -n "$sum_file" ] && ! safe_download "$CORE_BIN_URL/SHA256SUMS" "$sum_file"; then
+                rm -f "$sum_file"
+                sum_file=""
+            fi
         fi
         if [ -n "$sum_file" ]; then
             exp_hash=$(grep "runet-fix-$TG_ARCH" "$sum_file" 2>/dev/null | awk '{print $1}')
@@ -224,6 +240,7 @@ if [ -n "$TG_ARCH" ]; then
                     INSTALLED_CORE=0
                 fi
             fi
+            case "$sum_file" in /tmp/*) rm -f "$sum_file" ;; esac
         fi
         if [ "$INSTALLED_CORE" = "1" ]; then
             chmod +x /usr/bin/runet-fix-core 2>/dev/null || true

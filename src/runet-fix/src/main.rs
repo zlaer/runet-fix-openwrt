@@ -8,7 +8,7 @@ mod zapret;
 
 use std::process::Command;
 
-const VERSION: &str = "1.4.2";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct SimpleLogger;
 static LOGGER: SimpleLogger = SimpleLogger;
@@ -39,12 +39,16 @@ pub fn init_logging(level: &str) {
 }
 
 fn print_usage() {
-    println!("runet-fix v{} - Unified High-Performance OpenWrt Suite", VERSION);
+    println!(
+        "runet-fix v{} - Unified High-Performance OpenWrt Suite",
+        VERSION
+    );
     println!("Usage: runet-fix <command> [options]");
     println!();
     println!("Applet Commands:");
     println!("  daemon [options]        Run Telegram transparent proxy daemon & IPC server");
     println!("  adblock [options]       Compile streaming adblock rules into dnsmasq (<0.4s)");
+    println!("  update-adblock          Update adblock rules (alias: update_adblock)");
     println!("  autotune [--json|apply] Native async Tokio prober for best Zapret preset");
     println!("  test [--json]           RuNet Health Probe diagnostics");
     println!("  zapret-args <preset>    Output nfqws command-line flags for a preset");
@@ -56,7 +60,7 @@ fn print_usage() {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
-    let prog_name = args.get(0).map(|s| s.as_str()).unwrap_or("");
+    let prog_name = args.first().map(|s| s.as_str()).unwrap_or("");
     let is_tg_proxy = prog_name.ends_with("tg-ws-proxy") || prog_name.ends_with("tg-ws-proxy.exe");
 
     // Version flag
@@ -73,7 +77,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Help flag
     if args.len() > 1 && (args[1] == "-h" || args[1] == "--help" || args[1] == "help") {
         if is_tg_proxy {
-            println!("tg-ws-proxy - High-performance Telegram Transparent Proxy & WebSocket Bridge");
+            println!(
+                "tg-ws-proxy - High-performance Telegram Transparent Proxy & WebSocket Bridge"
+            );
             println!("Usage: tg-ws-proxy [-p <port>] [-l <listen>] [-s <secret>] [--pool-size <size>] [-w <workers>] [--domains <domains>]");
         } else {
             print_usage();
@@ -96,18 +102,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             init_logging("info");
             proxy::run(subargs)
         }
-        "adblock" | "update-adblock" => {
-            adblock::run(subargs)
-        }
-        "autotune" => {
-            autotune::run(subargs)
-        }
-        "test" => {
-            test_cmd::run(subargs)
-        }
-        "zapret-args" => {
-            zapret::print_args(subargs)
-        }
+        "adblock" | "update-adblock" | "update_adblock" => adblock::run(subargs),
+        "autotune" => autotune::run(subargs),
+        "test" => test_cmd::run(subargs),
+        "zapret-args" => zapret::print_args(subargs),
         "status" => {
             let is_json = subargs.iter().any(|a| a == "--json");
             if let Some(sock_resp) = ipc::query_daemon_socket("status") {
@@ -124,9 +122,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         "start" | "stop" | "restart" => {
-            let status = Command::new("/etc/init.d/runet-fix")
-                .arg(subcmd)
-                .status()?;
+            let status = Command::new("/etc/init.d/runet-fix").arg(subcmd).status()?;
             std::process::exit(status.code().unwrap_or(0));
         }
         "firewall" => {

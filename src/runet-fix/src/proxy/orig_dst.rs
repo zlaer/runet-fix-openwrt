@@ -73,7 +73,11 @@ pub fn set_outbound_mark_fd(fd: std::os::unix::io::RawFd, mark: u32) -> io::Resu
             std::mem::size_of::<u32>() as libc::socklen_t,
         );
         if ret != 0 {
-            log::warn!("Failed to set SO_MARK 0x{:08x}: {}", mark, io::Error::last_os_error());
+            log::warn!(
+                "Failed to set SO_MARK 0x{:08x}: {}",
+                mark,
+                io::Error::last_os_error()
+            );
         }
     }
     Ok(())

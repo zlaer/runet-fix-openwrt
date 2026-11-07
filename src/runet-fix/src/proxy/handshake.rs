@@ -118,15 +118,15 @@ pub fn generate_relay_init(
             || first_4 == b"POST"
             || first_4 == b"GET "
             || first_4 == b"OPTI"
-            || first_4 == &[0xEE, 0xEE, 0xEE, 0xEE]
-            || first_4 == &[0xDD, 0xDD, 0xDD, 0xDD]
-            || first_4 == &[0x16, 0x03, 0x01, 0x02]
+            || first_4 == [0xEE, 0xEE, 0xEE, 0xEE]
+            || first_4 == [0xDD, 0xDD, 0xDD, 0xDD]
+            || first_4 == [0x16, 0x03, 0x01, 0x02]
         {
             continue;
         }
 
         // Avoid 0x00000000 continuation
-        if &rnd[4..8] == &[0, 0, 0, 0] {
+        if rnd[4..8] == [0, 0, 0, 0] {
             continue;
         }
 
@@ -256,7 +256,10 @@ mod tests {
     fn test_parse_client_handshake_roundtrip() {
         let (handshake, _, _) = generate_relay_init(PROTO_TAG_INTERMEDIATE, 2);
         let res = parse_client_handshake(&handshake, None);
-        assert!(res.is_some(), "Generated handshake should parse successfully");
+        assert!(
+            res.is_some(),
+            "Generated handshake should parse successfully"
+        );
         let parsed = res.unwrap();
         assert_eq!(parsed.dc_id, 2);
         assert_eq!(parsed.proto_tag, PROTO_TAG_INTERMEDIATE);

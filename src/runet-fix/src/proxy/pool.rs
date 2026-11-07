@@ -2,10 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
+use tokio::task::JoinSet;
 use tokio_rustls::rustls::ClientConfig;
 
 use super::orig_dst::default_ip_for_dc;
 use super::ws::RawWebSocket;
+
+/// Maximum number of upstream connections opened (or pinged) concurrently per tick.
+const REFILL_CONCURRENCY: usize = 4;
 
 pub struct WsConnectionPool {
     pool: Arc<Mutex<HashMap<u8, Vec<RawWebSocket>>>>,
@@ -58,27 +62,27 @@ impl WsConnectionPool {
     }
 
     /// Background task that keeps connections alive with PING and refills depleted pools on demand.
-    async fn maintenance_loop(&self) {
+    async fn maintenance_loop(self: Arc<Self>) {
         let mut ticker = tokio::time::interval(Duration::from_secs(25));
         loop {
             ticker.tick().await;
 
-            // 1. Keep-alive ping for active connections in pool
+            // 1. Move idle connections out of the pool so PINGs never run while the
+            //    mutex is held. A connection lives either in the pool or in this batch,
+            //    so it cannot be pinged twice.
+            let candidates = {
+                let mut lock = self.pool.lock().await;
+                drain_connections(&mut lock)
+            };
+            let healthy = Self::ping_batch(candidates).await;
             {
                 let mut lock = self.pool.lock().await;
-                for (_dc, list) in lock.iter_mut() {
-                    let mut i = 0;
-                    while i < list.len() {
-                        if list[i].send_ping().await.is_err() {
-                            list.swap_remove(i);
-                        } else {
-                            i += 1;
-                        }
-                    }
+                for (dc, ws) in healthy {
+                    lock.entry(dc).or_default().push(ws);
                 }
             }
 
-            // 2. Refill pools:
+            // 2. Refill pools in a single batch (not one connection per tick):
             // DC 2 and DC 4 are core (95% of traffic in CIS) -> always refill up to pool_size.
             // DC 1, DC 3, DC 5 are demand-driven -> only refill if active in the last 15 minutes.
             let now = Instant::now();
@@ -87,33 +91,102 @@ impl WsConnectionPool {
                 lock.clone()
             };
 
-            for dc in 1..=5 {
-                let should_refill = if dc == 2 || dc == 4 {
-                    true
-                } else if let Some(&last_time) = accessed_map.get(&dc) {
-                    now.duration_since(last_time) < Duration::from_secs(900)
-                } else {
-                    false
-                };
+            let deficits = {
+                let lock = self.pool.lock().await;
+                let mut deficits = Vec::new();
+                for dc in 1..=5u8 {
+                    let should_refill = if dc == 2 || dc == 4 {
+                        true
+                    } else if let Some(&last_time) = accessed_map.get(&dc) {
+                        now.duration_since(last_time) < Duration::from_secs(900)
+                    } else {
+                        false
+                    };
 
-                if !should_refill {
-                    continue;
+                    if !should_refill {
+                        continue;
+                    }
+
+                    let current_count = lock.get(&dc).map_or(0, |v| v.len());
+                    if current_count < self.pool_size {
+                        deficits.push((dc, self.pool_size - current_count));
+                    }
+                }
+                deficits
+            };
+
+            if deficits.is_empty() {
+                continue;
+            }
+
+            let mut pending = Vec::new();
+            for (dc, count) in deficits {
+                for _ in 0..count {
+                    pending.push(dc);
+                }
+            }
+
+            let mut tasks = JoinSet::new();
+            let mut refilled = Vec::new();
+            loop {
+                while tasks.len() < REFILL_CONCURRENCY {
+                    match pending.pop() {
+                        Some(dc) => {
+                            let pool = Arc::clone(&self);
+                            tasks.spawn(async move { (dc, pool.create_connection(dc).await) });
+                        }
+                        None => break,
+                    }
                 }
 
-                let current_count = {
-                    let lock = self.pool.lock().await;
-                    lock.get(&dc).map(|v| v.len()).unwrap_or(0)
-                };
-
-                if current_count < self.pool_size {
-                    if let Ok(ws) = self.create_connection(dc).await {
-                        let mut lock = self.pool.lock().await;
-                        lock.entry(dc).or_default().push(ws);
+                match tasks.join_next().await {
+                    Some(Ok((dc, Ok(ws)))) => {
                         log::debug!("Refilled warm WS connection for DC{}", dc);
+                        refilled.push((dc, ws));
                     }
+                    Some(Ok((dc, Err(e)))) => {
+                        log::debug!("Failed to refill warm WS connection for DC{}: {}", dc, e);
+                    }
+                    Some(Err(e)) => log::warn!("Warm pool refill task failed: {}", e),
+                    None => break,
+                }
+            }
+
+            if !refilled.is_empty() {
+                let mut lock = self.pool.lock().await;
+                for (dc, ws) in refilled {
+                    lock.entry(dc).or_default().push(ws);
                 }
             }
         }
+    }
+
+    /// Pings a batch of connections outside of the pool lock, with bounded concurrency.
+    async fn ping_batch(candidates: Vec<(u8, RawWebSocket)>) -> Vec<(u8, RawWebSocket)> {
+        let mut pending = candidates;
+        let mut tasks = JoinSet::new();
+        let mut healthy = Vec::new();
+        loop {
+            while tasks.len() < REFILL_CONCURRENCY {
+                match pending.pop() {
+                    Some((dc, mut ws)) => {
+                        tasks.spawn(async move {
+                            let ok = ws.send_ping().await.is_ok();
+                            (dc, ws, ok)
+                        });
+                    }
+                    None => break,
+                }
+            }
+
+            match tasks.join_next().await {
+                Some(Ok((dc, ws, true))) => healthy.push((dc, ws)),
+                Some(Ok((_, _, false))) => {}
+                Some(Err(e)) => log::warn!("Warm pool ping task failed: {}", e),
+                None => break,
+            }
+        }
+        healthy
     }
 
     /// Opens a fresh WebSocket connection to Cloudflare Worker, Cloudflare relay, or official Telegram endpoint.
@@ -133,7 +206,11 @@ impl WsConnectionPool {
             )
             .await
             {
-                log::debug!("Connected upstream via Cloudflare Worker {} for DC{}", worker, dc);
+                log::debug!(
+                    "Connected upstream via Cloudflare Worker {} for DC{}",
+                    worker,
+                    dc
+                );
                 return Ok(ws);
             }
         }
@@ -167,5 +244,51 @@ impl WsConnectionPool {
             Duration::from_secs(8),
         )
         .await
+    }
+}
+
+/// Removes every idle connection from `pool`, preserving its DC.
+///
+/// The caller owns the returned connections, so it can release the lock before
+/// performing network I/O (PING) on them.
+fn drain_connections<T>(pool: &mut HashMap<u8, Vec<T>>) -> Vec<(u8, T)> {
+    let mut drained = Vec::new();
+    for (dc, list) in pool.iter_mut() {
+        drained.extend(list.drain(..).map(|conn| (*dc, conn)));
+    }
+    pool.retain(|_, list| !list.is_empty());
+    drained
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_drain_connections_owns_candidates() {
+        let mut pool: HashMap<u8, Vec<u32>> = HashMap::new();
+        pool.insert(2, vec![10, 11]);
+        pool.insert(4, vec![20]);
+
+        let mut candidates = drain_connections(&mut pool);
+        candidates.sort_by_key(|(dc, id)| (*dc, *id));
+
+        assert_eq!(candidates, vec![(2, 10), (2, 11), (4, 20)]);
+        assert!(pool.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_candidates_are_selected_without_holding_lock() {
+        let pool = Arc::new(Mutex::new(HashMap::from([(2u8, vec![10u32, 11])])));
+
+        let candidates = {
+            let mut guard = pool.lock().await;
+            drain_connections(&mut guard)
+        };
+
+        // The guard is released before a "ping" would start, so the pool stays usable.
+        let acquired = tokio::time::timeout(Duration::from_millis(100), pool.lock()).await;
+        assert!(acquired.is_ok());
+        assert_eq!(candidates.len(), 2);
     }
 }

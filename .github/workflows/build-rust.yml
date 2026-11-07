@@ -5,6 +5,22 @@ on:
     branches: [ "master" ]
     paths:
       - 'src/runet-fix/**'
+      - 'files/**'
+      - 'scripts/**'
+      - 'version'
+      - 'Makefile'
+      - 'README.md'
+      - 'install.sh'
+      - '.github/workflows/build-rust.yml'
+  pull_request:
+    paths:
+      - 'src/runet-fix/**'
+      - 'files/**'
+      - 'scripts/**'
+      - 'version'
+      - 'Makefile'
+      - 'README.md'
+      - 'install.sh'
       - '.github/workflows/build-rust.yml'
   workflow_dispatch:
 
@@ -12,8 +28,60 @@ permissions:
   contents: write
 
 jobs:
+  checks:
+    name: Lint and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/runet-fix
+
+      - name: cargo fmt
+        working-directory: src/runet-fix
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: src/runet-fix
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: src/runet-fix
+        run: cargo test
+
+      - name: Python syntax check
+        run: python3 -m compileall -q files/usr/share/runet-fix/tg_ws_proxy
+
+      - name: Python unit tests
+        run: python3 -m unittest discover -s files/usr/share/runet-fix/tg_ws_proxy -t files/usr/share/runet-fix -p "test_*.py"
+
+      - name: LuCI JavaScript syntax check
+        run: node --check files/www/luci-static/resources/view/runet-fix/overview.js
+
+      - name: Shell syntax check
+        run: |
+          sh -n install.sh
+          sh -n files/usr/bin/runet-fix
+          sh -n files/etc/init.d/runet-fix
+          for f in files/usr/share/runet-fix/scripts/*.sh scripts/*.sh; do
+            sh -n "$f"
+          done
+
+      - name: Version consistency
+        run: sh scripts/check-version.sh
+
   build:
     name: Build ${{ matrix.name }}
+    needs: checks
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,23 +90,12 @@ jobs:
           - target: aarch64-unknown-linux-musl
             name: runet-fix-aarch64
             legacy_name: tg-ws-proxy-aarch64
-            allow_fail: false
           - target: armv7-unknown-linux-musleabihf
             name: runet-fix-armv7
             legacy_name: tg-ws-proxy-armv7
-            allow_fail: false
           - target: x86_64-unknown-linux-musl
             name: runet-fix-x86_64
             legacy_name: tg-ws-proxy-x86_64
-            allow_fail: false
-          - target: mipsel-unknown-linux-musl
-            name: runet-fix-mipsel
-            legacy_name: tg-ws-proxy-mipsel
-            allow_fail: true
-          - target: mips-unknown-linux-musl
-            name: runet-fix-mips
-            legacy_name: tg-ws-proxy-mips
-            allow_fail: true
 
     steps:
       - name: Checkout repository
@@ -47,37 +104,47 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/runet-fix
+          key: ${{ matrix.target }}
+
       - name: Install Cross and UPX
         run: |
           curl -sL https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-musl.tar.gz | sudo tar xz -C /usr/local/bin
           sudo apt-get update && sudo apt-get install -y upx-ucl
 
       - name: Build target with cross
-        continue-on-error: ${{ matrix.allow_fail }}
         run: |
           cd src/runet-fix
           cross build --target ${{ matrix.target }} --release
 
       - name: Compress and package binary
-        continue-on-error: ${{ matrix.allow_fail }}
         run: |
           SRC="src/runet-fix/target/${{ matrix.target }}/release/runet-fix"
           DST="${{ matrix.name }}"
           LEGACY="${{ matrix.legacy_name }}"
-          if [ -f "$SRC" ]; then
-            cp "$SRC" "$DST"
-            chmod +x "$DST"
-            echo "Raw binary size:"
-            ls -lh "$DST"
-            upx --best "$DST" || true
-            echo "Final compressed binary size:"
-            ls -lh "$DST"
-            cp "$DST" "$LEGACY"
-          else
-            echo "Binary not found, skipping packaging."
-            touch "$DST"
-            touch "$LEGACY"
+          if [ ! -f "$SRC" ]; then
+            echo "Binary not found: $SRC" >&2
+            exit 1
           fi
+          cp "$SRC" "$DST"
+          chmod +x "$DST"
+          if [ ! -s "$DST" ]; then
+            echo "Binary is empty: $DST" >&2
+            exit 1
+          fi
+          if ! file "$DST" | grep -q 'ELF'; then
+            echo "Binary is not an ELF executable: $DST" >&2
+            exit 1
+          fi
+          echo "Raw binary size:"
+          ls -lh "$DST"
+          upx --best "$DST" || true
+          echo "Final compressed binary size:"
+          ls -lh "$DST"
+          cp "$DST" "$LEGACY"
 
       - name: Upload Core Artifact
         uses: actions/upload-artifact@v4

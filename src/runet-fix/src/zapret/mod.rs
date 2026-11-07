@@ -103,7 +103,7 @@ pub fn get_zapret_args(preset: &str, custom: Option<&str>) -> String {
 }
 
 pub fn print_args(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let preset = args.get(0).map(|s| s.as_str()).unwrap_or("youtube_4k");
+    let preset = args.first().map(|s| s.as_str()).unwrap_or("youtube_4k");
     let custom = args.get(1).map(|s| s.as_str());
     println!("{}", get_zapret_args(preset, custom));
     Ok(())
@@ -151,7 +151,11 @@ mod tests {
         for p in presets {
             let args = get_zapret_args(p, None);
             assert!(!args.is_empty(), "Preset {} returned empty args", p);
-            assert!(args.contains("--dpi-desync"), "Preset {} missing --dpi-desync", p);
+            assert!(
+                args.contains("--dpi-desync"),
+                "Preset {} missing --dpi-desync",
+                p
+            );
         }
     }
 

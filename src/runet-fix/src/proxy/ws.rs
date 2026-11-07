@@ -91,11 +91,13 @@ impl RawWebSocket {
         let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-        let config = ClientConfig::builder_with_provider(Arc::new(tokio_rustls::rustls::crypto::ring::default_provider()))
-            .with_safe_default_protocol_versions()
-            .expect("ring default protocol versions")
-            .with_root_certificates(root_store)
-            .with_no_client_auth();
+        let config = ClientConfig::builder_with_provider(Arc::new(
+            tokio_rustls::rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("ring default protocol versions")
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
 
         Arc::new(config)
     }
@@ -151,14 +153,18 @@ impl RawWebSocket {
 
             let tcp = connected_stream.ok_or_else(|| {
                 last_err.unwrap_or_else(|| {
-                    io::Error::new(io::ErrorKind::NotConnected, format!("Cannot connect to {}", addr))
+                    io::Error::new(
+                        io::ErrorKind::NotConnected,
+                        format!("Cannot connect to {}", addr),
+                    )
                 })
             })?;
 
             let stream = if let Some(cfg) = tls_config {
                 let connector = TlsConnector::from(cfg);
-                let server_name = ServerName::try_from(domain.to_string())
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid SNI: {:?}", e)))?;
+                let server_name = ServerName::try_from(domain.to_string()).map_err(|e| {
+                    io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid SNI: {:?}", e))
+                })?;
                 let tls_stream = connector.connect(server_name, tcp).await?;
                 WsStream::Tls(Box::new(tls_stream))
             } else {
@@ -205,18 +211,27 @@ impl RawWebSocket {
         while total_read < header_buf.len() {
             let n = self.stream.read(&mut header_buf[total_read..]).await?;
             if n == 0 {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "HTTP upgrade EOF"));
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "HTTP upgrade EOF",
+                ));
             }
             total_read += n;
 
-            if let Some(pos) = header_buf[..total_read].windows(4).position(|w| w == b"\r\n\r\n") {
+            if let Some(pos) = header_buf[..total_read]
+                .windows(4)
+                .position(|w| w == b"\r\n\r\n")
+            {
                 header_end = Some(pos + 4);
                 break;
             }
         }
 
         let end_idx = header_end.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "HTTP upgrade response headers too large")
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTP upgrade response headers too large",
+            )
         })?;
 
         let header_str = String::from_utf8_lossy(&header_buf[..end_idx]);
@@ -230,7 +245,8 @@ impl RawWebSocket {
 
         // Store any leftover body bytes in read_buf
         if total_read > end_idx {
-            self.read_buf.extend_from_slice(&header_buf[end_idx..total_read]);
+            self.read_buf
+                .extend_from_slice(&header_buf[end_idx..total_read]);
         }
 
         Ok(())
@@ -364,7 +380,10 @@ impl RawWebSocket {
 
             // In-place unmask payload in read_buf without intermediate heap allocation
             if let Some(m) = mask {
-                for (i, byte) in self.read_buf[header_size..total_frame].iter_mut().enumerate() {
+                for (i, byte) in self.read_buf[header_size..total_frame]
+                    .iter_mut()
+                    .enumerate()
+                {
                     *byte ^= m[i % 4];
                 }
             }

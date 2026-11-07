@@ -251,11 +251,15 @@ class _WsPool:
 class _CfWorkerPool:
     WS_POOL_MAX_AGE = 100.0
     PER_DC_LIMIT = 1
+    RATE_LIMIT_MIN_BACKOFF = 60.0
+    RATE_LIMIT_MAX_BACKOFF = 86400.0
+    RATE_LIMIT_MAX_RETRIES = 5
 
     def __init__(self):
         self._idle: Dict[int, deque] = {}
         self._refilling: Dict[int, asyncio.Task] = {}
         self._exhausted_until: Dict[str, float] = {}
+        self._rate_limit_hits: Dict[str, int] = {}
 
     async def get(self, dc: int, fallback_dst: str,
                   worker_domains: List[str]
@@ -345,17 +349,43 @@ class _CfWorkerPool:
         return domains
 
     def report_failure(self, worker_domain: str, exc: Exception) -> None:
-        return  # TODO: check status code after daily limit reached
         if not isinstance(exc, WsHandshakeError) or exc.status_code != 429:
             return
 
         now = time.time()
         if self._exhausted_until.get(worker_domain, 0) > now:
             return
-        exhausted_until = now + (86400 - (now % 86400))
-        self._exhausted_until[worker_domain] = exhausted_until
+
+        hits = self._rate_limit_hits.get(worker_domain, 0) + 1
+        self._rate_limit_hits[worker_domain] = hits
+
+        retry_after = self._parse_retry_after(exc.headers.get('retry-after'))
+        if retry_after is not None:
+            delay = retry_after
+        else:
+            # Cloudflare Workers reset the daily request quota at UTC midnight.
+            delay = self.RATE_LIMIT_MAX_BACKOFF - (now % self.RATE_LIMIT_MAX_BACKOFF)
+        delay = max(delay, self.RATE_LIMIT_MIN_BACKOFF)
+        delay = min(delay * (2 ** min(hits - 1, 5)),
+                    self.RATE_LIMIT_MAX_BACKOFF)
+        if hits > self.RATE_LIMIT_MAX_RETRIES:
+            delay = self.RATE_LIMIT_MAX_BACKOFF
+
+        self._exhausted_until[worker_domain] = now + delay
         log.warning(
-            "CF worker %s reached its request limit, disabled for %d seconds", worker_domain, int(exhausted_until - now))
+            "CF worker %s hit HTTP 429 (attempt %d)%s, disabled for %ds",
+            worker_domain, hits,
+            " with Retry-After" if retry_after is not None else "",
+            int(delay))
+
+    @staticmethod
+    def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+        if not value:
+            return None
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return None
 
     async def _quiet_close(self, ws):
         try:
@@ -392,6 +422,7 @@ class _CfWorkerPool:
         self._idle.clear()
         self._refilling.clear()
         self._exhausted_until.clear()
+        self._rate_limit_hits.clear()
 
     async def close(self):
         tasks = list(self._refilling.values())
