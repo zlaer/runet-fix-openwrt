@@ -7,11 +7,14 @@ on:
       - 'src/runet-fix/**'
       - 'files/**'
       - 'scripts/**'
+      - 'prebuilt/**'
       - 'version'
       - 'Makefile'
       - 'README.md'
       - 'install.sh'
       - '.github/workflows/build-rust.yml'
+    tags:
+      - 'v*'
   pull_request:
     paths:
       - 'src/runet-fix/**'
@@ -159,3 +162,41 @@ jobs:
           name: ${{ matrix.legacy_name }}
           path: ${{ matrix.legacy_name }}
           if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: [checks, build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          cd release_assets
+          sha256sum runet-fix-* tg-ws-proxy-* > SHA256SUMS
+          chmod +x runet-fix-* tg-ws-proxy-* || true
+          ls -lh
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release_assets/runet-fix-aarch64
+            release_assets/runet-fix-armv7
+            release_assets/runet-fix-x86_64
+            release_assets/tg-ws-proxy-aarch64
+            release_assets/tg-ws-proxy-armv7
+            release_assets/tg-ws-proxy-x86_64
+            release_assets/SHA256SUMS
+          generate_release_notes: true
