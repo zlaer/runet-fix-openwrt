@@ -3,7 +3,7 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.5.0"
+CURRENT_VERSION="1.5.1"
 [ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
 
 REPO_USER="zlaer"
@@ -209,6 +209,9 @@ EOF
     adblock|update-adblock|update_adblock)
         /usr/share/runet-fix/scripts/update-adblock.sh
         ;;
+    update-hosts|update_hosts)
+        /usr/share/runet-fix/scripts/update-hosts.sh
+        ;;
     firewall)
         /usr/share/runet-fix/scripts/runet-fix-firewall.sh status
         ;;
@@ -288,7 +291,7 @@ EOF
         ;;
     *)
         echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"
-        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|update_adblock|firewall|test|autotune|log|uninstall}"
+        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|update-hosts|firewall|test|autotune|log|uninstall}"
         echo "       runet-fix autotune [--json] [--apply]"
         echo "       runet-fix version [--json]"
         echo "       runet-fix check-update [--json]"

@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.5.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.5.1-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]
@@ -53,6 +53,9 @@
     * Flowseal SIMPLE FAKE и Flowseal EXP
     * Custom (ручной ввод аргументов nfqws)
   * Режим работы: «Весь трафик» (All Traffic) или «Только список хостов» (Hostlist Mode).
+  * **Авто-обновление заблокированных доменов**: загрузка курируемого легковесного списка доменов AntiFilter Community в 1 клик и по расписанию cron.
+  * **Авто-детект блокировок (AutoHostList)**: динамическое обнаружение попыток блокировки ТСПУ через nfqws и добавление доменов в список обхода на лету.
+  * **Исключение доменов зоны .ru, .рф, .su**: гарантированный пропуск российского трафика (банки, Госуслуги, сервисы) напрямую без десинхронизации.
   * Фикс голосовых каналов Discord (WebRTC & STUN UDP).
   * **Ускорение онлайн-игр (Game UDP Fix)**: десинхронизация портов Steam, CS2, Dota 2, GTA Online с оригинальными бинарными паттернами.
   * **Исключение устройств (Device Bypass)**: обход перехвата по IP и MAC-адресам для рабочих VPN-ноутбуков и Smart TV.

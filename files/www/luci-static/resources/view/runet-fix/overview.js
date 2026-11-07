@@ -69,6 +69,7 @@ var I18N = {
 		actions_section: 'Быстрые действия',
 		btn_restart: 'Перезапустить службы',
 		btn_update_adblock: 'Обновить Adblock',
+		btn_update_hosts: 'Обновить список Zapret',
 		btn_refresh: 'Обновить статус',
 		working: 'Выполняется...',
 		success: 'Успешно!',
@@ -135,6 +136,7 @@ var I18N = {
 		actions_section: 'Quick Actions',
 		btn_restart: 'Restart Services',
 		btn_update_adblock: 'Update Adblock Now',
+		btn_update_hosts: 'Update Zapret Hosts',
 		btn_refresh: 'Refresh Status',
 		working: 'Working...',
 		success: 'Success!',
@@ -161,11 +163,14 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.5.0';
-			}).catch(function() { return '1.5.0'; }),
+				return (res || '').trim() || '1.5.1';
+			}).catch(function() { return '1.5.1'; }),
 			fs.read('/tmp/tg-ws-proxy-stats.json').then(function(res) {
 				try { return JSON.parse(res || '{}'); } catch(e) { return {}; }
-			}).catch(function() { return {}; })
+			}).catch(function() { return {}; }),
+			fs.read('/tmp/runet-fix-hosts.count').then(function(res) {
+				return parseInt((res || '').trim()) || 0;
+			}).catch(function() { return 0; })
 		]);
 	},
 
@@ -176,6 +181,7 @@ return view.extend({
 
 		var serviceData = data[1] || {};
 		var adblockRules = data[2] || 0;
+		var hostsCount = data[5] || 0;
 
 		// Extract instances from procd
 		var instances = (serviceData['runet-fix'] && serviceData['runet-fix'].instances) ? serviceData['runet-fix'].instances : {};
@@ -187,7 +193,7 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.5.0';
+		var currentVersion = data[3] || '1.5.1';
 		var tgStats = data[4] || {};
 
 		// Attach global window handlers with closures to fs and translations
@@ -467,6 +473,10 @@ return view.extend({
 		v_ctrl.cfgvalue = function() {
 			return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:4px 0;">' +
 				'  <span class="badge" style="background:#007bff;color:#fff;padding:4px 10px;border-radius:4px;font-weight:bold;font-size:13px;">v' + currentVersion + '</span>' +
+				'  <a href="https://github.com/zlaer/runet-fix-openwrt" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#58a6ff;text-decoration:none;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' +
+				'    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>' +
+				'    GitHub' +
+				'  </a>' +
 				'  <span id="rf-update-status" style="font-size:13px;color:#888;"></span>' +
 				'  <div style="display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap;">' +
 				'    <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
@@ -479,8 +489,13 @@ return view.extend({
 		var o = s.option(form.DummyValue, '_status_table', t.status_table);
 		o.rawhtml = true;
 		o.cfgvalue = function() {
+			var zapretMode = uci.get('runet-fix', 'zapret', 'mode') || 'all';
+			var zapretExtra = (zapretRunning && zapretMode === 'list') ?
+				'<span style="font-size:12px;color:#28a745;margin-left:6px;font-weight:normal;">(' +
+				(curLang === 'ru' ? 'по списку: ' : 'hostlist: ') + (hostsCount > 0 ? hostsCount.toLocaleString() + ' ' + t.domains : 'активен') + ')</span>' : '';
+
 			var zapretBadge = zapretRunning ? 
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.running + ' (PID ' + zapretPid + ')</span>' :
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.running + ' (PID ' + zapretPid + ')</span>' + zapretExtra :
 				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.stopped + '</span>';
 
 			var tgExtra = (telegramRunning && tgStats.total_sessions !== undefined) ?
@@ -552,6 +567,7 @@ return view.extend({
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + (curLang === 'ru' ? 'Авто-подбор Zapret' : 'Zapret Autotune') + '</button> ' +
+				'<button type="button" class="btn cbi-button-save" id="btn-hosts" onclick="window.runetFixAction(\'update-hosts\')">' + t.btn_update_hosts + '</button> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update-adblock\')">' + t.btn_update_adblock + '</button> ' +
 				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
 				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +

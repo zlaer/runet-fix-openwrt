@@ -156,7 +156,7 @@ start_service() {
         if [ -x "$FIREWALL_SCRIPT" ]; then
             "$FIREWALL_SCRIPT" stop
         fi
-        rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+        rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count /tmp/runet-fix-ru-exclude.txt
         /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
         return 0
     fi
@@ -222,9 +222,22 @@ start_service() {
                 local main_tcp="--new --filter-tcp=80,443 $desync_opts"
                 if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
                     main_tcp="$main_tcp --hostlist=$hostlist"
+                    local autohost_enabled=$(uci -q get runet-fix.zapret.autohostlist || echo "1")
+                    if [ "$autohost_enabled" = "1" ]; then
+                        local autohost="/tmp/runet-fix-hosts-auto.txt"
+                        mkdir -p /tmp/runet-fix 2>/dev/null || true
+                        touch "$autohost" 2>/dev/null || true
+                        main_tcp="$main_tcp --hostlist-auto=$autohost --hostlist-auto-fail-threshold=3 --hostlist-auto-fail-time=60"
+                    fi
                 fi
                 if [ -s "$excludelist" ]; then
                     main_tcp="$main_tcp --hostlist-exclude=$excludelist"
+                fi
+                local exclude_ru=$(uci -q get runet-fix.zapret.exclude_ru || echo "1")
+                if [ "$exclude_ru" = "1" ]; then
+                    local ru_exclude="/tmp/runet-fix-ru-exclude.txt"
+                    printf "ru\nxn--p1ai\nsu\n" > "$ru_exclude" 2>/dev/null || true
+                    main_tcp="$main_tcp --hostlist-exclude=$ru_exclude"
                 fi
 
                 args="--qnum=$qnum $quic_opts"
@@ -350,7 +363,7 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
+    rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count /tmp/runet-fix-ru-exclude.txt
     /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
 }
 
@@ -365,7 +378,7 @@ update_adblock() {
 
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    local ver="1.5.0"
+    local ver="1.5.1"
     [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
     echo "=== [runet-fix v$ver] All-in-One Status ==="
 

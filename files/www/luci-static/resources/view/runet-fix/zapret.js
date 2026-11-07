@@ -36,8 +36,21 @@ var I18N = {
 		custom_args_desc: 'Используется только при выборе профиля «Пользовательские аргументы». Пример: --dpi-desync=fake,split2 --dpi-desync-split-pos=1',
 		section_exclude: 'Список исключений (Exclusion List)',
 		desc_exclude: 'Домены российских сервисов (банки, Госуслуги, платежные системы МИР), которые НЕ должны подвергаться десинхронизации пакетов. Все поддомены исключаются автоматически. По одному домену на строку.',
+		exclude_ru: 'Исключать все домены зоны .ru, .рф, .su',
+		exclude_ru_desc: 'Автоматически исключает любые российские сайты из обработки Zapret (как в режиме всего трафика, так и по списку) для предотвращения сбоев и прямого быстрого подключения.',
 		section_hosts: 'Целевой список доменов (Hostlist)',
-		desc_hosts: 'Домены, которые обрабатываются через Zapret только при выборе режима «Только по списку». По одному домену на строку.'
+		desc_hosts: 'Домены, которые обрабатываются через Zapret только при выборе режима «Только по списку». По одному домену на строку.',
+		autohostlist: 'Авто-обнаружение блокировок (AutoHostList)',
+		autohostlist_desc: 'nfqws на лету определяет попытки блокировки провайдером по TCP RST / таймаутам и автоматически добавляет заблокированные домены в список обхода.',
+		auto_update_hosts: 'Авто-обновление списка блокировок',
+		auto_update_hosts_desc: 'Периодическая загрузка свежего курируемого списка заблокированных доменов AntiFilter Community.',
+		btn_update_hosts: 'Обновить список из AntiFilter Community',
+		btn_update_hosts_desc: 'Загрузить свежие заблокированные домены и объединить с вашим локальным списком.',
+		update_hosts_ok: 'Список заблокированных доменов успешно обновлен!',
+		update_hosts_err: 'Ошибка при обновлении списка: ',
+		upd_disabled: 'Отключено',
+		upd_weekly: 'Еженедельно (Рекомендуется)',
+		upd_daily: 'Ежедневно'
 	},
 	en: {
 		title: 'Zapret (DPI Circumvention)',
@@ -69,8 +82,21 @@ var I18N = {
 		custom_args_desc: 'Used only when Preset is set to "Custom". Example: --dpi-desync=fake,split2 --dpi-desync-split-pos=1',
 		section_exclude: 'Exclusion List (Domestic Services)',
 		desc_exclude: 'Domains of Russian domestic services (banks, Gosuslugi, MIR payment gateways) that should NOT be desynchronized. All subdomains are automatically excluded. One domain per line.',
+		exclude_ru: 'Exclude all .ru, .рф, .su domains',
+		exclude_ru_desc: 'Automatically bypasses Zapret DPI processing for all Russian domestic domains (in both All Traffic and Hostlist modes) to ensure zero interference.',
 		section_hosts: 'Zapret Target Hostlist',
-		desc_hosts: 'Domains that are desynchronized when in "Target Hostlist Only" mode. One domain per line.'
+		desc_hosts: 'Domains that are desynchronized when in "Target Hostlist Only" mode. One domain per line.',
+		autohostlist: 'Automatic DPI Block Detection (AutoHostList)',
+		autohostlist_desc: 'nfqws dynamically detects TSPU block attempts via TCP RST/timeouts and automatically adds new blocked domains to the bypass list on the fly.',
+		auto_update_hosts: 'Auto-Update Blocked Hostlist',
+		auto_update_hosts_desc: 'Periodically fetch the latest curated AntiFilter Community blocked domains list.',
+		btn_update_hosts: 'Update list from AntiFilter Community',
+		btn_update_hosts_desc: 'Download latest blocked domains and merge with your custom hostlist.',
+		update_hosts_ok: 'Zapret hostlist updated successfully!',
+		update_hosts_err: 'Error updating hostlist: ',
+		upd_disabled: 'Disabled',
+		upd_weekly: 'Weekly (Recommended)',
+		upd_daily: 'Daily'
 	}
 };
 
@@ -196,6 +222,10 @@ return view.extend({
 		// 2. Exclusion List Section (Russian domestic services, banks, Gosuslugi)
 		var s_exclude = m.section(form.NamedSection, 'zapret', 'zapret', t.section_exclude, t.desc_exclude);
 
+		var excl_ru = s_exclude.option(form.Flag, 'exclude_ru', t.exclude_ru, t.exclude_ru_desc);
+		excl_ru.rmempty = false;
+		excl_ru.default = excl_ru.enabled;
+
 		var exhosts = s_exclude.option(form.TextValue, '_excludelist');
 		exhosts.rows = 12;
 		exhosts.wrap = 'off';
@@ -208,6 +238,28 @@ return view.extend({
 
 		// 3. Hostlist Section (Only used when Traffic Interception Scope is set to "Target Hostlist Only")
 		var s2 = m.section(form.NamedSection, 'zapret', 'zapret', t.section_hosts, t.desc_hosts);
+
+		var autohost = s2.option(form.Flag, 'autohostlist', t.autohostlist, t.autohostlist_desc);
+		autohost.rmempty = false;
+		autohost.default = autohost.enabled;
+
+		var auto_upd_hosts = s2.option(form.ListValue, 'auto_update_hosts', t.auto_update_hosts, t.auto_update_hosts_desc);
+		auto_upd_hosts.value('disabled', t.upd_disabled);
+		auto_upd_hosts.value('weekly', t.upd_weekly);
+		auto_upd_hosts.value('daily', t.upd_daily);
+		auto_upd_hosts.default = 'weekly';
+
+		var btn_upd_h = s2.option(form.Button, '_update_hosts_btn', t.btn_update_hosts, t.btn_update_hosts_desc);
+		btn_upd_h.inputtitle = t.btn_update_hosts;
+		btn_upd_h.inputstyle = 'apply';
+		btn_upd_h.onclick = function() {
+			return fs.exec('/usr/bin/runet-fix', ['update-hosts']).then(function() {
+				ui.addNotification(null, E('p', t.update_hosts_ok), 'info');
+				setTimeout(function() { location.reload(); }, 1500);
+			}).catch(function(e) {
+				ui.addNotification(null, E('p', t.update_hosts_err + (e.message || e)), 'error');
+			});
+		};
 
 		var hosts = s2.option(form.TextValue, '_hostlist');
 		hosts.rows = 12;

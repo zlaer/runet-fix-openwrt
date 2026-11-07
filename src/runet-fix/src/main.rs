@@ -49,6 +49,7 @@ fn print_usage() {
     println!("  daemon [options]        Run Telegram transparent proxy daemon & IPC server");
     println!("  adblock [options]       Compile streaming adblock rules into dnsmasq (<0.4s)");
     println!("  update-adblock          Update adblock rules (alias: update_adblock)");
+    println!("  update-hosts            Update Zapret target hostlist from AntiFilter Community");
     println!("  autotune [--json|apply] Native async Tokio prober for best Zapret preset");
     println!("  test [--json]           RuNet Health Probe diagnostics");
     println!("  zapret-args <preset>    Output nfqws command-line flags for a preset");
@@ -103,6 +104,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             proxy::run(subargs)
         }
         "adblock" | "update-adblock" | "update_adblock" => adblock::run(subargs),
+        "update-hosts" | "update_hosts" => {
+            let status = Command::new("/usr/share/runet-fix/scripts/update-hosts.sh").status()?;
+            std::process::exit(status.code().unwrap_or(0));
+        }
         "autotune" => autotune::run(subargs),
         "test" => test_cmd::run(subargs),
         "zapret-args" => zapret::print_args(subargs),
