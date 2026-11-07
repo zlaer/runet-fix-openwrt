@@ -249,9 +249,17 @@ chmod +x /usr/bin/runet-fix
 chmod +x /usr/share/runet-fix/scripts/*
 chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py 2>/dev/null || true
 chmod +x /etc/init.d/runet-fix
+mkdir -p /www/luci-static/resources/view/runet-fix
+chmod -R 755 /www/luci-static/resources/view/runet-fix 2>/dev/null || true
+chmod 644 /www/luci-static/resources/view/runet-fix/* 2>/dev/null || true
+chmod 644 /usr/share/luci/menu.d/* 2>/dev/null || true
+chmod 644 /usr/share/rpcd/acl.d/* 2>/dev/null || true
+chmod -R 755 /usr/share/runet-fix 2>/dev/null || true
+chmod 644 /usr/share/runet-fix/lists/* 2>/dev/null || true
+chmod 644 /usr/share/runet-fix/version 2>/dev/null || true
 
 # Run uci-defaults to refresh LuCI cache
-rm -f /tmp/luci-indexcache
+rm -f /tmp/luci-indexcache*
 killall -HUP rpcd 2>/dev/null || true
 
 /etc/init.d/runet-fix enable

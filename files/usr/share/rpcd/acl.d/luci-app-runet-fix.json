@@ -13,6 +13,7 @@
 				"/tmp/runet-fix-adblock.count": [ "read" ],
 				"/tmp/runet-fix-test.json": [ "read", "stat" ],
 				"/tmp/runet-fix-update.json": [ "read", "stat" ],
+				"/tmp/tg-ws-proxy-stats.json": [ "read", "stat" ],
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read", "stat" ],
 				"/usr/bin/runet-fix": [ "exec" ],
 				"/usr/share/runet-fix/scripts/*": [ "exec" ],

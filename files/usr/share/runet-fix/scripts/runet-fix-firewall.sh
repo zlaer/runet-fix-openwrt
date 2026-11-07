@@ -63,10 +63,11 @@ start_nft() {
 
     echo "[runet-fix] Compiling and applying atomic nftables rules (fw4)..."
 
+    # Clean existing table before atomic replacement
+    nft delete table inet $TABLE_NAME 2>/dev/null || true
+
     local NFT_CONF="/tmp/runet-fix-nft.conf"
     cat << 'EOF_HDR' > "$NFT_CONF"
-table inet runet_fix
-delete table inet runet_fix
 table inet runet_fix {
     set telegram_v4 {
         type ipv4_addr

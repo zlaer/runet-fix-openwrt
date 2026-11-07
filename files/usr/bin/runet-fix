@@ -183,12 +183,21 @@ EOF
         chmod +x /etc/init.d/runet-fix /usr/bin/runet-fix
         chmod +x /usr/share/runet-fix/scripts/*.sh 2>/dev/null || true
         chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py 2>/dev/null || true
+        mkdir -p /www/luci-static/resources/view/runet-fix
+        chmod -R 755 /www/luci-static/resources/view/runet-fix 2>/dev/null || true
+        chmod 644 /www/luci-static/resources/view/runet-fix/* 2>/dev/null || true
+        chmod 644 /usr/share/luci/menu.d/* 2>/dev/null || true
+        chmod 644 /usr/share/rpcd/acl.d/* 2>/dev/null || true
+        chmod -R 755 /usr/share/runet-fix 2>/dev/null || true
+        chmod 644 /usr/share/runet-fix/lists/* 2>/dev/null || true
+        chmod 644 /usr/share/runet-fix/version 2>/dev/null || true
 
         echo "Clearing LuCI view and index cache..."
         rm -f /tmp/luci-indexcache*
         touch /lib/apk/db/installed /usr/lib/opkg/status 2>/dev/null || true
         killall -HUP rpcd 2>/dev/null || true
-        /etc/init.d/uhttpd restart 2>/dev/null || true
+        # Gracefully reload uhttpd in background so active RPC HTTP connection is not severed
+        (sleep 2 && /etc/init.d/uhttpd reload 2>/dev/null || /etc/init.d/uhttpd restart 2>/dev/null) >/dev/null 2>&1 &
 
         echo "Restarting runet-fix services..."
         /etc/init.d/runet-fix restart
