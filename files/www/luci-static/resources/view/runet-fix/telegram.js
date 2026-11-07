@@ -128,41 +128,59 @@ return view.extend({
 				'</div>';
 		};
 
+		var workersSlot = E('div', { 'class': 'rf-workers-slot' });
+		var domainsSlot = E('div', { 'class': 'rf-domains-slot', 'style': 'margin-top:12px;' });
+
+		var workerDetails = E('details', {
+			'style': 'background:#1e293b;padding:12px 16px;border-radius:6px;margin:15px 0;border:1px solid #334155;'
+		}, [
+			E('summary', {
+				'style': 'font-weight:bold;color:#38bdf8;cursor:pointer;font-size:13px;'
+			}, t.worker_spoiler_title),
+			E('div', {
+				'class': 'alert-message info',
+				'style': 'margin-top:12px;margin-bottom:12px;font-size:12px;line-height:1.6;'
+			}),
+			workersSlot,
+			domainsSlot
+		]);
+		workerDetails.querySelector('.alert-message.info').innerHTML =
+			'<strong>' + t.worker_guide_title + '</strong><br>' + t.worker_guide_text;
+
 		var workers = s.option(form.Value, 'custom_workers', t.worker_field, t.worker_desc);
 		workers.placeholder = 'my-tg-worker.username.workers.dev';
 
 		var origWorkersRender = workers.render;
 		workers.render = function(option_index, section_id, in_table) {
 			return origWorkersRender.apply(this, arguments).then(function(node) {
-				var val = uci.get('runet-fix', section_id, 'custom_workers') || '';
-				var hasValue = val.trim().length > 0;
-				var details = E('details', {
-					'style': 'background:#1e293b;padding:12px 16px;border-radius:6px;margin:15px 0;border:1px solid #334155;'
-				}, [
-					E('summary', {
-						'style': 'font-weight:bold;color:#38bdf8;cursor:pointer;font-size:13px;'
-					}, t.worker_spoiler_title),
-					E('div', {
-						'class': 'alert-message info',
-						'style': 'margin-top:12px;margin-bottom:12px;font-size:12px;line-height:1.6;'
-					}),
-					node
-				]);
-				if (hasValue) {
-					details.setAttribute('open', '');
+				var valW = uci.get('runet-fix', section_id, 'custom_workers') || '';
+				var valD = uci.get('runet-fix', section_id, 'custom_domains') || '';
+				if (valW.trim().length > 0 || valD.trim().length > 0) {
+					workerDetails.setAttribute('open', '');
 				}
-				details.querySelector('.alert-message.info').innerHTML =
-					'<strong>' + t.worker_guide_title + '</strong><br>' + t.worker_guide_text;
-				return details;
+				workersSlot.appendChild(node);
+				return workerDetails;
+			});
+		};
+
+		var domains = s.option(form.Value, 'custom_domains', t.domains, t.domains_desc);
+		domains.placeholder = 'mydomain.com';
+
+		var origDomainsRender = domains.render;
+		domains.render = function(option_index, section_id, in_table) {
+			return origDomainsRender.apply(this, arguments).then(function(node) {
+				var valD = uci.get('runet-fix', section_id, 'custom_domains') || '';
+				if (valD.trim().length > 0) {
+					workerDetails.setAttribute('open', '');
+				}
+				domainsSlot.appendChild(node);
+				return E('span', { 'style': 'display:none' });
 			});
 		};
 
 		var port = s.option(form.Value, 'port', t.port, t.port_desc);
 		port.datatype = 'port';
 		port.default = '1443';
-
-		var domains = s.option(form.Value, 'custom_domains', t.domains, t.domains_desc);
-		domains.placeholder = 'mydomain.com';
 
 		// Optional manual section
 		var manualSection = s.option(form.DummyValue, '_manual');

@@ -68,7 +68,6 @@ var I18N = {
 		rpc_err: 'Ошибка RPC: ',
 		actions_section: 'Быстрые действия',
 		btn_restart: 'Перезапустить службы',
-		btn_zapret_settings: 'Настройки Zapret',
 		btn_update_adblock: 'Обновить Adblock',
 		btn_refresh: 'Обновить статус',
 		working: 'Выполняется...',
@@ -135,7 +134,6 @@ var I18N = {
 		rpc_err: 'RPC Error: ',
 		actions_section: 'Quick Actions',
 		btn_restart: 'Restart Services',
-		btn_zapret_settings: 'Zapret Settings',
 		btn_update_adblock: 'Update Adblock Now',
 		btn_refresh: 'Refresh Status',
 		working: 'Working...',
@@ -511,6 +509,11 @@ return view.extend({
 		probe_ui.rawhtml = true;
 		probe_ui.cfgvalue = function() {
 			return '<div id="probe-container" style="background:#1e1e1e;border:1px solid #333;border-radius:8px;padding:14px;margin-top:6px;">' +
+				'<style>' +
+				'.rf-probe-grid { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin-top:14px; }' +
+				'@media (max-width: 680px) { .rf-probe-grid { grid-template-columns:repeat(2, minmax(0, 1fr)) !important; gap:8px !important; } }' +
+				'@media (max-width: 360px) { .rf-probe-grid { grid-template-columns:1fr !important; } }' +
+				'</style>' +
 				'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
 				'  <div>' +
 				'    <strong style="font-size:14px;color:#fff;">' + t.diag_title + '</strong><br>' +
@@ -518,22 +521,22 @@ return view.extend({
 				'  </div>' +
 				'  <button type="button" class="btn cbi-button-action" id="btn-run-probe" style="padding:6px 16px;font-weight:bold;" onclick="window.runRuNetHealthProbe()">' + t.btn_run_diag + '</button>' +
 				'</div>' +
-				'<div id="probe-results" style="display:none;margin-top:14px;display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">' +
-				'  <div id="card-yt" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">' + t.card_yt + '</div>' +
-				'    <div id="val-yt" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'<div id="probe-results" class="rf-probe-grid" style="display:none;">' +
+				'  <div id="card-yt" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_yt + '</div>' +
+				'    <div id="val-yt" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
 				'  </div>' +
-				'  <div id="card-dc" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">' + t.card_dc + '</div>' +
-				'    <div id="val-dc" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'  <div id="card-dc" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_dc + '</div>' +
+				'    <div id="val-dc" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
 				'  </div>' +
-				'  <div id="card-tg" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">' + t.card_tg + '</div>' +
-				'    <div id="val-tg" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'  <div id="card-tg" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_tg + '</div>' +
+				'    <div id="val-tg" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
 				'  </div>' +
-				'  <div id="card-dns" style="background:#282c34;padding:10px;border-radius:6px;border-left:4px solid #6c757d;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;">' + t.card_dns + '</div>' +
-				'    <div id="val-dns" style="font-size:14px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'  <div id="card-dns" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_dns + '</div>' +
+				'    <div id="val-dns" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
 				'  </div>' +
 				'</div>' +
 				'</div>';
@@ -549,7 +552,6 @@ return view.extend({
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
 				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
 				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + (curLang === 'ru' ? 'Авто-подбор Zapret' : 'Zapret Autotune') + '</button> ' +
-				'<a class="btn cbi-button-action" style="text-decoration:none;display:inline-block;" href="zapret">' + t.btn_zapret_settings + '</a> ' +
 				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update_adblock\')">' + t.btn_update_adblock + '</button> ' +
 				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
 				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
