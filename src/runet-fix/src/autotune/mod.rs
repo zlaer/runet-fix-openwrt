@@ -20,10 +20,10 @@ pub struct PresetScore {
 
 fn find_nfqws() -> Option<String> {
     for b in &[
-        "/usr/bin/nfqws2",
-        "/opt/zapret2/nfq2/nfqws2",
         "/usr/bin/nfqws",
         "/opt/zapret/nfq/nfqws",
+        "/usr/bin/nfqws2",
+        "/opt/zapret2/nfq2/nfqws2",
     ] {
         if std::path::Path::new(b).exists() {
             return Some(b.to_string());

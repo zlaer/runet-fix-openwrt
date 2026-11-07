@@ -17,7 +17,7 @@ check_binary() {
 }
 
 find_nfqws() {
-    for b in /usr/bin/nfqws2 /opt/zapret2/nfq2/nfqws2 /usr/bin/nfqws /opt/zapret/nfq/nfqws; do
+    for b in /usr/bin/nfqws /opt/zapret/nfq/nfqws /usr/bin/nfqws2 /opt/zapret2/nfq2/nfqws2; do
         if [ -x "$b" ]; then
             echo "$b"
             return 0
@@ -30,19 +30,23 @@ kill_stray_nfqws() {
     local qnum=$(uci -q get runet-fix.zapret.qnum)
     [ -z "$qnum" ] && qnum="200"
 
-    local inst_pid=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['zapret'].pid" 2>/dev/null)
-
     local pid cmdline
     for pid in $(pidof nfqws nfqws2 2>/dev/null); do
-        [ "$pid" = "$inst_pid" ] && continue
         [ -r "/proc/$pid/cmdline" ] || continue
         cmdline=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
         case "$cmdline" in
             *"--qnum=$qnum"*)
-                echo "[runet-fix] Killing stray nfqws (PID $pid) holding NFQUEUE $qnum"
+                echo "[runet-fix] Terminating old nfqws (PID $pid) holding NFQUEUE $qnum"
                 kill -9 "$pid" 2>/dev/null
                 ;;
         esac
+    done
+
+    # Wait up to 1 second for kernel netfilter queue to be fully released
+    local i=0
+    while grep -qw "$qnum" /proc/net/netfilter/nfnetlink_queue 2>/dev/null && [ $i -lt 20 ]; do
+        usleep 50000 2>/dev/null || sleep 1
+        i=$((i + 1))
     done
 }
 
@@ -156,7 +160,7 @@ start_service() {
         if [ -x "$FIREWALL_SCRIPT" ]; then
             "$FIREWALL_SCRIPT" stop
         fi
-        rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count /tmp/runet-fix-ru-exclude.txt
+        rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
         /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
         return 0
     fi
@@ -235,8 +239,10 @@ start_service() {
                 fi
                 local exclude_ru=$(uci -q get runet-fix.zapret.exclude_ru || echo "1")
                 if [ "$exclude_ru" = "1" ]; then
-                    local ru_exclude="/tmp/runet-fix-ru-exclude.txt"
-                    printf "ru\nxn--p1ai\nsu\n" > "$ru_exclude" 2>/dev/null || true
+                    local ru_exclude="/usr/share/runet-fix/lists/zapret-ru-zones.txt"
+                    if [ ! -s "$ru_exclude" ]; then
+                        printf "ru\nxn--p1ai\nsu\n" > "$ru_exclude" 2>/dev/null || true
+                    fi
                     main_tcp="$main_tcp --hostlist-exclude=$ru_exclude"
                 fi
 
@@ -363,7 +369,7 @@ stop_service() {
     if [ -x "$FIREWALL_SCRIPT" ]; then
         "$FIREWALL_SCRIPT" stop
     fi
-    rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count /tmp/runet-fix-ru-exclude.txt
+    rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
     /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
 }
 
