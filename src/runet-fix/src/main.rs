@@ -8,7 +8,7 @@ mod zapret;
 
 use std::process::Command;
 
-const VERSION: &str = "1.4.1";
+const VERSION: &str = "1.4.2";
 
 struct SimpleLogger;
 static LOGGER: SimpleLogger = SimpleLogger;
@@ -27,7 +27,7 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-fn init_logging(level: &str) {
+pub fn init_logging(level: &str) {
     let filter = match level.to_lowercase().as_str() {
         "debug" => log::LevelFilter::Debug,
         "warn" => log::LevelFilter::Warn,

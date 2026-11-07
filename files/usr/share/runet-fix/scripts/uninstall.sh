@@ -11,9 +11,9 @@ if [ -x /etc/init.d/runet-fix ]; then
 fi
 
 # Kill any leftover daemons
-killall nfqws >/dev/null 2>&1
-killall tg-transproxy >/dev/null 2>&1
-pkill -f tg_ws_transparent.py >/dev/null 2>&1
+killall nfqws nfqws2 >/dev/null 2>&1
+killall tg-ws-proxy runet-fix-core >/dev/null 2>&1
+pkill -f tg_ws_proxy/main.py >/dev/null 2>&1
 
 # 2. Clean up firewall / nftables
 if [ -x /usr/share/runet-fix/scripts/runet-fix-firewall.sh ]; then
@@ -53,7 +53,7 @@ rm -f /etc/config/runet-fix
 logger -t runet-fix "Uninstallation finished successfully."
 
 # 8. Remove bin and share directories
-rm -f /usr/bin/runet-fix
+rm -f /usr/bin/runet-fix /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
 rm -rf /usr/share/runet-fix
 
 exit 0

@@ -13,14 +13,20 @@ use tokio_rustls::TlsConnector;
 #[cfg(target_os = "linux")]
 use std::os::unix::io::AsRawFd;
 
+#[cfg(target_os = "linux")]
 use super::orig_dst::{set_outbound_mark_fd, DEFAULT_OUTBOUND_MARK};
 
 pub const WS_OP_CONT: u8 = 0x0;
+#[allow(dead_code)]
 pub const WS_OP_TEXT: u8 = 0x1;
 pub const WS_OP_BINARY: u8 = 0x2;
 pub const WS_OP_CLOSE: u8 = 0x8;
 pub const WS_OP_PING: u8 = 0x9;
 pub const WS_OP_PONG: u8 = 0xA;
+
+/// Maximum payload size allowed for a single WebSocket frame (8 MB).
+/// Protects memory-constrained routers (64-128 MB RAM) from OOM panics.
+pub const MAX_WS_FRAME_PAYLOAD: usize = 8 * 1024 * 1024;
 
 pub enum WsStream {
     Plain(TcpStream),
@@ -257,12 +263,17 @@ impl RawWebSocket {
         // Send frame header
         self.stream.write_all(&header[..hdr_len]).await?;
 
-        // Mask payload and send
-        let mut masked_payload = payload.to_vec();
-        for (i, byte) in masked_payload.iter_mut().enumerate() {
-            *byte ^= mask[i % 4];
+        // Stream masked payload in 8KB chunks to prevent large heap allocations
+        let mut chunk_buf = [0u8; 8192];
+        let mut offset = 0;
+        while offset < payload.len() {
+            let chunk_len = (payload.len() - offset).min(chunk_buf.len());
+            for i in 0..chunk_len {
+                chunk_buf[i] = payload[offset + i] ^ mask[(offset + i) % 4];
+            }
+            self.stream.write_all(&chunk_buf[..chunk_len]).await?;
+            offset += chunk_len;
         }
-        self.stream.write_all(&masked_payload).await?;
         self.stream.flush().await?;
 
         Ok(())
@@ -318,6 +329,17 @@ impl RawWebSocket {
                 offset += 8;
             }
 
+            // Immediately enforce payload limit before reading payload bytes to prevent OOM
+            if payload_len > MAX_WS_FRAME_PAYLOAD {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "WebSocket frame payload {} bytes exceeds limit {} bytes",
+                        payload_len, MAX_WS_FRAME_PAYLOAD
+                    ),
+                ));
+            }
+
             let mask = if is_masked {
                 let mut m = [0u8; 4];
                 m.copy_from_slice(&self.read_buf[offset..offset + 4]);
@@ -331,39 +353,46 @@ impl RawWebSocket {
             let total_frame = header_size + payload_len;
             while self.read_buf.len() < total_frame {
                 let needed = total_frame - self.read_buf.len();
-                let to_read = needed.min(65536);
-                let mut tmp = vec![0u8; to_read];
-                let n = self.stream.read(&mut tmp).await?;
+                let mut tmp = [0u8; 8192];
+                let to_read = needed.min(tmp.len());
+                let n = self.stream.read(&mut tmp[..to_read]).await?;
                 if n == 0 {
                     return Ok(0);
                 }
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
 
-            let mut payload = self.read_buf[header_size..total_frame].to_vec();
+            // In-place unmask payload in read_buf without intermediate heap allocation
             if let Some(m) = mask {
-                for (i, byte) in payload.iter_mut().enumerate() {
+                for (i, byte) in self.read_buf[header_size..total_frame].iter_mut().enumerate() {
                     *byte ^= m[i % 4];
                 }
             }
 
-            // Drain processed frame from read_buf
-            self.read_buf.drain(..total_frame);
-
             match opcode {
                 WS_OP_BINARY | WS_OP_CONT => {
-                    let n = payload.len();
-                    out_buf.extend_from_slice(&payload);
-                    return Ok(n);
+                    out_buf.extend_from_slice(&self.read_buf[header_size..total_frame]);
+                    self.read_buf.drain(..total_frame);
+                    if self.read_buf.is_empty() && self.read_buf.capacity() > 65536 {
+                        self.read_buf.shrink_to(16384);
+                    }
+                    return Ok(payload_len);
                 }
                 WS_OP_PING => {
-                    self.send_pong(&payload).await?;
+                    let ping_payload = self.read_buf[header_size..total_frame].to_vec();
+                    self.read_buf.drain(..total_frame);
+                    if self.read_buf.is_empty() && self.read_buf.capacity() > 65536 {
+                        self.read_buf.shrink_to(16384);
+                    }
+                    self.send_pong(&ping_payload).await?;
                     continue;
                 }
                 WS_OP_CLOSE => {
+                    self.read_buf.drain(..total_frame);
                     return Ok(0);
                 }
                 _ => {
+                    self.read_buf.drain(..total_frame);
                     continue;
                 }
             }
@@ -401,5 +430,38 @@ impl RawWebSocket {
         let _ = self.stream.flush().await;
         let _ = self.stream.shutdown().await;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_masking_roundtrip() {
+        let original = b"MTProto Obfuscated2 Data Stream Payload For Testing";
+        let mask = [0x12, 0x34, 0x56, 0x78];
+
+        let mut masked = original.to_vec();
+        for (i, b) in masked.iter_mut().enumerate() {
+            *b ^= mask[i % 4];
+        }
+
+        // Must differ from original
+        assert_ne!(&masked[..], &original[..]);
+
+        // In-place unmask
+        for (i, b) in masked.iter_mut().enumerate() {
+            *b ^= mask[i % 4];
+        }
+
+        assert_eq!(&masked[..], &original[..]);
+    }
+
+    #[test]
+    fn test_max_frame_payload_limit() {
+        assert_eq!(MAX_WS_FRAME_PAYLOAD, 8 * 1024 * 1024);
+        let oversized: usize = 16 * 1024 * 1024;
+        assert!(oversized > MAX_WS_FRAME_PAYLOAD);
     }
 }

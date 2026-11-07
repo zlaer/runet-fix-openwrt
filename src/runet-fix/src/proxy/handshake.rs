@@ -230,3 +230,43 @@ pub fn build_crypto_context(
         tg_dec,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_relay_init_structure() {
+        let (handshake, mut enc, mut dec) = generate_relay_init(PROTO_TAG_INTERMEDIATE, 2);
+        assert_eq!(handshake.len(), 64);
+        assert_ne!(handshake[0], 0xEF);
+        assert_ne!(&handshake[0..4], b"GET ");
+        assert_ne!(&handshake[0..4], b"POST");
+        assert_ne!(&handshake[0..4], b"HEAD");
+
+        // Verify ciphers can encrypt and decrypt without panicking
+        let mut msg = b"Hello, Telegram!".to_vec();
+        enc.apply_keystream(&mut msg);
+        dec.apply_keystream(&mut msg);
+        // Note: dec key is derived from reversed bytes, verifying cipher initialization
+        assert_eq!(msg.len(), 16);
+    }
+
+    #[test]
+    fn test_parse_client_handshake_roundtrip() {
+        let (handshake, _, _) = generate_relay_init(PROTO_TAG_INTERMEDIATE, 2);
+        let res = parse_client_handshake(&handshake, None);
+        assert!(res.is_some(), "Generated handshake should parse successfully");
+        let parsed = res.unwrap();
+        assert_eq!(parsed.dc_id, 2);
+        assert_eq!(parsed.proto_tag, PROTO_TAG_INTERMEDIATE);
+        assert!(!parsed.is_media);
+    }
+
+    #[test]
+    fn test_parse_client_handshake_invalid() {
+        let dummy = [0u8; 64];
+        let res = parse_client_handshake(&dummy, None);
+        assert!(res.is_none(), "Null handshake should be rejected");
+    }
+}

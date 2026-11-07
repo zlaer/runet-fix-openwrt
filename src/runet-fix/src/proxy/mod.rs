@@ -58,6 +58,8 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    crate::init_logging(&cfg.log_level);
+
     let workers = cfg.get_worker_list();
     log::info!(
         "Starting runet-fix proxy daemon on {}:{} (pool_size={}, domains={}, workers={})",

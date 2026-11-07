@@ -11,7 +11,7 @@ is_fw4() {
     command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/README -o -f /usr/share/firewall4/main.nft ]
 }
 
-# Telegram IP subnets
+# Telegram IP subnets (IPv4 and IPv6)
 TELEGRAM_SUBNETS="
 91.108.4.0/22
 91.108.8.0/22
@@ -23,16 +23,21 @@ TELEGRAM_SUBNETS="
 185.76.151.0/24
 "
 
+TELEGRAM_V6_SUBNETS="
+2001:67c:4e8::/48
+2001:b28:f23d::/48
+2001:b28:f23f::/48
+"
+
 # ==============================================================================
 # NFTABLES (fw4 - OpenWrt 22.03+)
 # ==============================================================================
 start_nft() {
-    stop_nft >/dev/null 2>&1
-
     # Load configuration values from UCI
     local main_enabled=$(uci -q get runet-fix.main.enabled)
     [ -z "$main_enabled" ] && main_enabled="1"
     if [ "$main_enabled" != "1" ]; then
+        stop_nft >/dev/null 2>&1
         echo "[runet-fix] Master switch disabled. Firewall rules cleaned."
         return 0
     fi
@@ -47,124 +52,135 @@ start_nft() {
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
     local excl_ips=$(uci -q get runet-fix.zapret.excluded_ips)
     local excl_macs=$(uci -q get runet-fix.zapret.excluded_macs)
+    local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
+    [ -z "$adb_enabled" ] && adb_enabled="1"
 
     if [ "$zapret_enabled" != "1" ] && [ "$tg_enabled" != "1" ]; then
+        stop_nft >/dev/null 2>&1
         echo "[runet-fix] Both Zapret and Telegram disabled. Firewall rules cleaned."
         return 0
     fi
 
-    echo "[runet-fix] Applying nftables rules (fw4)..."
+    echo "[runet-fix] Compiling and applying atomic nftables rules (fw4)..."
 
-    # Create dedicated table
-    nft add table inet $TABLE_NAME
+    local NFT_CONF="/tmp/runet-fix-nft.conf"
+    cat << 'EOF_HDR' > "$NFT_CONF"
+table inet runet_fix
+delete table inet runet_fix
+table inet runet_fix {
+    set telegram_v4 {
+        type ipv4_addr
+        flags interval
+        elements = {
+            91.108.4.0/22, 91.108.8.0/22, 91.108.12.0/22,
+            91.108.16.0/22, 91.108.20.0/22, 91.108.56.0/22,
+            149.154.160.0/20, 185.76.151.0/24
+        }
+    }
+    set telegram_v6 {
+        type ipv6_addr
+        flags interval
+        elements = {
+            2001:67c:4e8::/48, 2001:b28:f23d::/48, 2001:b28:f23f::/48
+        }
+    }
+EOF_HDR
 
-    # 1. Telegram Subnets Set
-    nft "add set inet $TABLE_NAME telegram_v4 { type ipv4_addr; flags interval; }"
-    for net in $TELEGRAM_SUBNETS; do
-        nft "add element inet $TABLE_NAME telegram_v4 { $net }"
-    done
-
-    # 2. Excluded Devices Sets (Device Bypass by IP / MAC)
+    # Excluded Devices Sets (Device Bypass by IP / MAC)
     local has_excl_ips=0
     if [ -n "$excl_ips" ]; then
-        nft "add set inet $TABLE_NAME excluded_ips { type ipv4_addr; flags interval; }"
-        for ip in $excl_ips; do
-            nft "add element inet $TABLE_NAME excluded_ips { $ip }"
-        done
+        echo "    set excluded_ips { type ipv4_addr; flags interval; elements = { $(echo $excl_ips | sed 's/ /, /g') } }" >> "$NFT_CONF"
         has_excl_ips=1
         echo "[runet-fix] Device bypass active for IPs: $excl_ips"
     fi
 
     local has_excl_macs=0
     if [ -n "$excl_macs" ]; then
-        nft "add set inet $TABLE_NAME excluded_macs { type ether_addr; }"
-        for mac in $excl_macs; do
-            nft "add element inet $TABLE_NAME excluded_macs { $mac }"
-        done
+        echo "    set excluded_macs { type ether_addr; elements = { $(echo $excl_macs | sed 's/ /, /g') } }" >> "$NFT_CONF"
         has_excl_macs=1
         echo "[runet-fix] Device bypass active for MACs: $excl_macs"
     fi
 
-    # 3. Telegram Transparent Redirection (NAT PREROUTING for LAN clients)
+    # Telegram Transparent Redirection (NAT PREROUTING for LAN clients) & IPv6 Leak Prevention
     if [ "$tg_enabled" = "1" ]; then
-        nft "add chain inet $TABLE_NAME tg_nat_pre { type nat hook prerouting priority dstnat; policy accept; }"
-        if [ "$has_excl_ips" = "1" ]; then
-            nft "add rule inet $TABLE_NAME tg_nat_pre ip saddr @excluded_ips return"
-        fi
-        if [ "$has_excl_macs" = "1" ]; then
-            nft "add rule inet $TABLE_NAME tg_nat_pre ether saddr @excluded_macs return"
-        fi
-        nft "add rule inet $TABLE_NAME tg_nat_pre ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port"
-        echo "[runet-fix] Telegram transparent redirection active -> :$tg_port"
+        cat << EOF_TG >> "$NFT_CONF"
+    chain tg_nat_pre {
+        type nat hook prerouting priority dstnat; policy accept;
+$([ "$has_excl_ips" = "1" ] && echo "        ip saddr @excluded_ips return")
+$([ "$has_excl_macs" = "1" ] && echo "        ether saddr @excluded_macs return")
+        ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port
+    }
+    chain tg_reject_v6 {
+        type filter hook forward priority mangle; policy accept;
+$([ "$has_excl_ips" = "1" ] && echo "        ip saddr @excluded_ips return")
+$([ "$has_excl_macs" = "1" ] && echo "        ether saddr @excluded_macs return")
+        ip6 daddr @telegram_v6 reject with icmpv6 type admin-prohibited
+    }
+    chain tg_reject_v6_out {
+        type filter hook output priority mangle; policy accept;
+        ip6 daddr @telegram_v6 reject with icmpv6 type admin-prohibited
+    }
+EOF_TG
+        echo "[runet-fix] Telegram transparent redirection active -> :$tg_port (with IPv6 fallback)"
     fi
 
-    # 4. Zapret DPI Bypass (NFQUEUE)
+    # Zapret DPI Bypass (NFQUEUE)
     if [ "$zapret_enabled" = "1" ]; then
-        nft "add chain inet $TABLE_NAME zapret_mangle { type filter hook forward priority mangle; policy accept; }"
-        
-        # Exclude designated LAN devices from DPI mangling
-        if [ "$has_excl_ips" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle ip saddr @excluded_ips return"
-        fi
-        if [ "$has_excl_macs" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle ether saddr @excluded_macs return"
-        fi
-
-        # Exclude Telegram subnets from forward NFQUEUE only if tg-ws-proxy is handling them
-        if [ "$tg_enabled" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle ip daddr @telegram_v4 return"
-        fi
-        
-        # Exclude local private LAN subnets
-        nft "add rule inet $TABLE_NAME zapret_mangle ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
-
-        # Intercept HTTP/HTTPS and Discord Media TCP ports
         local tcp_ports="80, 443"
         if [ "$discord_fix" = "1" ]; then
             tcp_ports="80, 443, 2053, 2083, 2087, 2096, 8443"
         fi
-        nft "add rule inet $TABLE_NAME zapret_mangle tcp dport { $tcp_ports } ct original packets < 20 counter queue num $QNUM bypass"
-        
-        # Discord Voice and Media UDP
-        if [ "$discord_fix" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle udp dport { 19294-19344, 50000-50100 } ct original packets < 10 counter queue num $QNUM bypass"
-        fi
 
-        # Online Game UDP Fix (CS2, Dota 2, Source Engine, GTA Online)
-        if [ "$game_fix" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle udp dport { 27015-27050, 7777-7780 } ct original packets < 10 counter queue num $QNUM bypass"
-            echo "[runet-fix] Game UDP acceleration active (ports 27015-27050, 7777-7780)"
-        fi
-        
-        # QUIC (UDP 443)
-        nft "add rule inet $TABLE_NAME zapret_mangle udp dport 443 ct original packets < 10 counter queue num $QNUM bypass"
-
-        # Router-local output chain (for diagnostics, curl, and autotune)
-        nft "add chain inet $TABLE_NAME zapret_mangle_out { type filter hook output priority mangle; policy accept; }"
-        nft "add rule inet $TABLE_NAME zapret_mangle_out mark 0x40000000 return"
-        nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return"
-        if [ "$tg_enabled" = "1" ]; then
-            nft "add rule inet $TABLE_NAME zapret_mangle_out ip daddr @telegram_v4 return"
-        fi
-        nft "add rule inet $TABLE_NAME zapret_mangle_out tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass"
-
+        cat << EOF_ZP >> "$NFT_CONF"
+    chain zapret_mangle {
+        type filter hook forward priority mangle; policy accept;
+$([ "$has_excl_ips" = "1" ] && echo "        ip saddr @excluded_ips return")
+$([ "$has_excl_macs" = "1" ] && echo "        ether saddr @excluded_macs return")
+$([ "$tg_enabled" = "1" ] && echo "        ip daddr @telegram_v4 return")
+        ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        tcp dport { $tcp_ports } ct original packets < 20 counter queue num $QNUM bypass
+$([ "$discord_fix" = "1" ] && echo "        udp dport { 19294-19344, 50000-50100 } ct original packets < 10 counter queue num $QNUM bypass")
+$([ "$game_fix" = "1" ] && echo "        udp dport { 27015-27050, 7777-7780 } ct original packets < 10 counter queue num $QNUM bypass")
+        udp dport 443 ct original packets < 10 counter queue num $QNUM bypass
+    }
+    chain zapret_mangle_out {
+        type filter hook output priority mangle; policy accept;
+        mark 0x40000000 return
+        ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+$([ "$tg_enabled" = "1" ] && echo "        ip daddr @telegram_v4 return")
+        tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass
+    }
+EOF_ZP
         echo "[runet-fix] Zapret NFQUEUE ($QNUM) active (Forward + Output)"
     fi
 
-    # 5. Port 53 DNS redirection (forces all clients through dnsmasq, prevents hardcoded DNS bypass)
-    local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
-    [ -z "$adb_enabled" ] && adb_enabled="1" 
+    # Port 53 DNS redirection (forces all clients through dnsmasq)
     if [ "$adb_enabled" = "1" ]; then
-        nft "add chain inet $TABLE_NAME dns_nat_pre { type nat hook prerouting priority dstnat; policy accept; }"
-        nft "add rule inet $TABLE_NAME dns_nat_pre udp dport 53 counter redirect to :53"
-        nft "add rule inet $TABLE_NAME dns_nat_pre tcp dport 53 counter redirect to :53"
+        cat << 'EOF_DNS' >> "$NFT_CONF"
+    chain dns_nat_pre {
+        type nat hook prerouting priority dstnat; policy accept;
+        udp dport 53 counter redirect to :53
+        tcp dport 53 counter redirect to :53
+    }
+EOF_DNS
         echo "[runet-fix] DNS interception active -> local dnsmasq :53"
+    fi
+
+    echo "}" >> "$NFT_CONF"
+
+    if nft -f "$NFT_CONF"; then
+        rm -f "$NFT_CONF"
+        echo "[runet-fix] Atomic nftables configuration applied successfully."
+    else
+        echo "[runet-fix] Error: Failed to apply atomic nftables configuration! (inspect $NFT_CONF)" >&2
+        return 1
     fi
 }
 
 stop_nft() {
     echo "[runet-fix] Removing nftables table $TABLE_NAME..."
     nft delete table inet $TABLE_NAME >/dev/null 2>&1 || true
+    rm -f /tmp/runet-fix-nft.conf
 }
 
 # ==============================================================================
@@ -210,6 +226,14 @@ start_ipt() {
         done
         iptables -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
         iptables -t nat -I PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG
+
+        # Telegram IPv6 leak prevention (fw3): force clients to fallback to IPv4 transparent proxy
+        if command -v ip6tables >/dev/null 2>&1; then
+            for net in $TELEGRAM_V6_SUBNETS; do
+                ip6tables -I FORWARD -d "$net" -p tcp -j REJECT --reject-with icmp6-adm-prohibited 2>/dev/null || true
+                ip6tables -I OUTPUT -d "$net" -p tcp -j REJECT --reject-with icmp6-adm-prohibited 2>/dev/null || true
+            done
+        fi
     fi
 
     # Zapret NFQUEUE
@@ -221,6 +245,7 @@ start_ipt() {
         if [ "$tg_enabled" = "1" ]; then
             iptables -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
         fi
+        iptables -t mangle -A RUNET_ZAPRET -m mark --mark 0x40000000 -j RETURN
         iptables -t mangle -A RUNET_ZAPRET -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8 -j RETURN
         local tcp_ports="80,443"
         if [ "$discord_fix" = "1" ]; then
@@ -237,6 +262,7 @@ start_ipt() {
         fi
         iptables -t mangle -A RUNET_ZAPRET -p udp --dport 443 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         iptables -t mangle -I FORWARD -j RUNET_ZAPRET
+        iptables -t mangle -I OUTPUT -j RUNET_ZAPRET
     fi
 
     # DNS Redirection (port 53)
@@ -255,10 +281,18 @@ stop_ipt() {
     iptables -t nat -X RUNET_TG 2>/dev/null || true
 
     iptables -t mangle -D FORWARD -j RUNET_ZAPRET 2>/dev/null || true
+    iptables -t mangle -D OUTPUT -j RUNET_ZAPRET 2>/dev/null || true
     iptables -t mangle -F RUNET_ZAPRET 2>/dev/null || true
     iptables -t mangle -X RUNET_ZAPRET 2>/dev/null || true
 
     ipset destroy tg_subnets 2>/dev/null || true
+
+    if command -v ip6tables >/dev/null 2>&1; then
+        for net in $TELEGRAM_V6_SUBNETS; do
+            ip6tables -D FORWARD -d "$net" -p tcp -j REJECT --reject-with icmp6-adm-prohibited 2>/dev/null || true
+            ip6tables -D OUTPUT -d "$net" -p tcp -j REJECT --reject-with icmp6-adm-prohibited 2>/dev/null || true
+        done
+    fi
 }
 
 case "$1" in

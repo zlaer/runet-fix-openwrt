@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=runet-fix
-PKG_VERSION:=1.3.0
+PKG_VERSION:=1.4.2
 PKG_RELEASE:=1
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
@@ -36,24 +36,15 @@ define Package/luci-app-runet-fix/description
   Web user interface for managing Runet-Fix in OpenWrt LuCI.
 endef
 
-define Build/Prepare
+Build/Prepare:
 	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ./src/tg-transproxy/* $(PKG_BUILD_DIR)/
-endef
 
-define Build/Compile
-	$(MAKE) -C $(PKG_BUILD_DIR) \
-		CC="$(TARGET_CC)" \
-		CFLAGS="$(TARGET_CFLAGS) -O2 -Wall -D_GNU_SOURCE" \
-		LDFLAGS="$(TARGET_LDFLAGS)"
-endef
+Build/Compile:
 
 define Package/runet-fix/install
-	# Install binaries
+	# Install CLI binary
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tg-transproxy $(1)/usr/bin/tg-transproxy
 	$(INSTALL_BIN) ./files/usr/bin/runet-fix $(1)/usr/bin/runet-fix
-	[ -f ./files/usr/bin/tg-ws-proxy ] && $(INSTALL_BIN) ./files/usr/bin/tg-ws-proxy $(1)/usr/bin/tg-ws-proxy || true
 
 	# Install init.d service
 	$(INSTALL_DIR) $(1)/etc/init.d
@@ -67,14 +58,20 @@ define Package/runet-fix/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-runet-fix $(1)/etc/uci-defaults/99-runet-fix
 
-	# Install scripts and lists
+	# Install scripts, lists, bin templates, and version
+	$(INSTALL_DIR) $(1)/usr/share/runet-fix
+	[ -f ./version ] && $(INSTALL_DATA) ./version $(1)/usr/share/runet-fix/version
+
+	$(INSTALL_DIR) $(1)/usr/share/runet-fix/bin
+	$(INSTALL_DATA) ./files/usr/share/runet-fix/bin/* $(1)/usr/share/runet-fix/bin/
+
 	$(INSTALL_DIR) $(1)/usr/share/runet-fix/scripts
 	$(INSTALL_BIN) ./files/usr/share/runet-fix/scripts/* $(1)/usr/share/runet-fix/scripts/
 
 	$(INSTALL_DIR) $(1)/usr/share/runet-fix/lists
 	$(INSTALL_DATA) ./files/usr/share/runet-fix/lists/* $(1)/usr/share/runet-fix/lists/
 
-	# Install Python Telegram WS Proxy
+	# Install Python Telegram WS Proxy fallback
 	$(INSTALL_DIR) $(1)/usr/share/runet-fix/tg_ws_proxy
 	$(INSTALL_DATA) ./files/usr/share/runet-fix/tg_ws_proxy/* $(1)/usr/share/runet-fix/tg_ws_proxy/
 	$(INSTALL_BIN) ./files/usr/share/runet-fix/tg_ws_proxy/main.py $(1)/usr/share/runet-fix/tg_ws_proxy/main.py

@@ -11,7 +11,6 @@ ADBLOCK_SCRIPT="/usr/share/runet-fix/scripts/update-adblock.sh"
 TG_RUST_BIN="/usr/bin/tg-ws-proxy"
 [ -x /usr/bin/runet-fix-core ] && TG_RUST_BIN="/usr/bin/runet-fix-core"
 TG_PY_SCRIPT="/usr/share/runet-fix/tg_ws_proxy/main.py"
-TG_C_BIN="/usr/bin/tg-transproxy"
 
 check_binary() {
     [ -x "$1" ] && "$1" --help >/dev/null 2>&1
@@ -263,19 +262,14 @@ start_service() {
         local custom_workers=$(uci -q get runet-fix.telegram.custom_workers || echo "")
 
         # Select Telegram Proxy Engine:
-        # 1. Native Rust binary (tg-ws-proxy-rs) - fastest, <2.5MB RAM, no Python dependency
-        # 2. Native C binary (tg-transproxy)
-        # 3. Python 3 asyncio daemon (fallback)
+        # 1. Native Rust binary (tg-ws-proxy / runet-fix-core) - fastest, <2.5MB RAM, zero runtime dependencies
+        # 2. Python 3 asyncio daemon (fallback for architectures without native binary)
         local engine_type="python"
         if [ "$tg_engine" = "rust" ] && check_binary "$TG_RUST_BIN"; then
             engine_type="rust"
-        elif [ "$tg_engine" = "c_native" ] && check_binary "$TG_C_BIN"; then
-            engine_type="c_native"
         elif [ "$tg_engine" = "auto" ]; then
             if check_binary "$TG_RUST_BIN"; then
                 engine_type="rust"
-            elif check_binary "$TG_C_BIN"; then
-                engine_type="c_native"
             else
                 engine_type="python"
             fi
@@ -288,9 +282,6 @@ start_service() {
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
             [ -n "$custom_domains" ] && procd_append_param command --domains "$custom_domains"
             [ -n "$custom_workers" ] && procd_append_param command --workers "$custom_workers"
-        elif [ "$engine_type" = "c_native" ]; then
-            echo "[runet-fix] Launching native C Telegram transparent proxy on port $tg_port..."
-            procd_set_param command "$TG_C_BIN" -p "$tg_port"
         else
             echo "[runet-fix] Launching Python Telegram WebSocket proxy on port $tg_port..."
             procd_set_param command python3 -u "$TG_PY_SCRIPT" -p "$tg_port" --pool-size "$tg_pool_size"
@@ -373,7 +364,7 @@ update_adblock() {
 
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    local ver="1.4.1"
+    local ver="1.4.2"
     [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
     echo "=== [runet-fix v$ver] All-in-One Status ==="
 
@@ -391,8 +382,8 @@ status_all() {
     local tg_pid=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['telegram'].pid" 2>/dev/null)
     if [ "$tg_running" = "true" ] && [ -n "$tg_pid" ]; then
         echo "Telegram Transparent Proxy: RUNNING (PID $tg_pid)"
-    elif pidof tg-ws-proxy tg-transproxy >/dev/null 2>&1; then
-        echo "Telegram Transparent Proxy: RUNNING (PID $(pidof tg-ws-proxy tg-transproxy))"
+    elif pidof tg-ws-proxy runet-fix-core >/dev/null 2>&1; then
+        echo "Telegram Transparent Proxy: RUNNING (PID $(pidof tg-ws-proxy runet-fix-core))"
     else
         echo "Telegram Transparent Proxy: STOPPED"
     fi

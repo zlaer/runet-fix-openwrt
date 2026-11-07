@@ -59,3 +59,31 @@ impl WhitelistMatcher {
         self.domains.len()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_whitelist_subdomain_matching() {
+        let mut wl = WhitelistMatcher::new();
+        wl.domains.insert("gosuslugi.ru".to_string());
+        wl.domains.insert("sberbank.ru".to_string());
+
+        assert!(wl.is_whitelisted("gosuslugi.ru"));
+        assert!(wl.is_whitelisted("esia.gosuslugi.ru"));
+        assert!(wl.is_whitelisted("sub.esia.gosuslugi.ru"));
+        assert!(wl.is_whitelisted("online.sberbank.ru"));
+
+        assert!(!wl.is_whitelisted("fakegosuslugi.ru"));
+        assert!(!wl.is_whitelisted("gosuslugi.ru.evil.com"));
+        assert!(!wl.is_whitelisted("google.com"));
+    }
+
+    #[test]
+    fn test_empty_whitelist() {
+        let wl = WhitelistMatcher::new();
+        assert!(!wl.is_whitelisted("anything.com"));
+        assert_eq!(wl.count(), 0);
+    }
+}

@@ -1,11 +1,20 @@
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::rustls::pki_types::ServerName;
+use tokio_rustls::rustls::ClientConfig;
 use tokio_rustls::TlsConnector;
 
 use crate::proxy::ws::RawWebSocket;
+
+static PROBE_TLS_CONFIG: OnceLock<Arc<ClientConfig>> = OnceLock::new();
+
+fn get_probe_tls_config() -> Arc<ClientConfig> {
+    PROBE_TLS_CONFIG.get_or_init(RawWebSocket::create_tls_config).clone()
+}
 
 pub struct ProbeResult {
     pub success: bool,
@@ -22,7 +31,7 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
         let addr = format!("{}:{}", host, port);
         let stream = TcpStream::connect(&addr).await?;
 
-        let tls_cfg = RawWebSocket::create_tls_config();
+        let tls_cfg = get_probe_tls_config();
         let connector = TlsConnector::from(tls_cfg);
         let server_name = ServerName::try_from(host.to_string())
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("Invalid SNI: {:?}", e)))?;
@@ -30,7 +39,7 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
         let mut tls_stream = connector.connect(server_name, stream).await?;
 
         let request = format!(
-            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/1.4.1\r\nConnection: close\r\n\r\n",
+            "HEAD / HTTP/1.1\r\nHost: {}\r\nUser-Agent: Mozilla/5.0 runet-fix/1.4.2\r\nConnection: close\r\n\r\n",
             host
         );
         tls_stream.write_all(request.as_bytes()).await?;

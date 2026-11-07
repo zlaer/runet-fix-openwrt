@@ -12,7 +12,7 @@ Runet-Fix supports both **OpenWrt Firewall 4 (`nftables`)** and **Firewall 3 (`i
 
 ```nft
 table inet runet_fix {
-    # Set of Telegram AS44907 / AS62041 CIDR ranges
+    # Set of Telegram AS44907 / AS62041 CIDR ranges (IPv4)
     set telegram_v4 {
         type ipv4_addr
         flags interval
@@ -23,10 +23,25 @@ table inet runet_fix {
         }
     }
 
+    # Set of Telegram AS44907 / AS62041 CIDR ranges (IPv6)
+    set telegram_v6 {
+        type ipv6_addr
+        flags interval
+        elements = {
+            2001:67c:4e8::/48, 2001:b28:f23d::/48, 2001:b28:f23f::/48
+        }
+    }
+
     # NAT Prerouting: Transparent redirection of Telegram TCP traffic
     chain tg_nat_pre {
         type nat hook prerouting priority dstnat; policy accept;
         ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :1443
+    }
+
+    # Telegram IPv6 leak prevention: forces dual-stack clients to fallback to IPv4 proxy
+    chain tg_reject_v6 {
+        type filter hook forward priority mangle; policy accept;
+        ip6 daddr @telegram_v6 reject with icmpv6 type admin-prohibited
     }
 
     # NAT Output: Redirects local router requests to Telegram
@@ -60,7 +75,7 @@ table inet runet_fix {
 1. **Ingress from LAN**:
    - Packets hit `prerouting`.
    - If destination IP matches `telegram_v4` and destination port is 80/443/5222/8443:
-     - Redirected to local port `1443` (`tg-transproxy`).
+     - Redirected to local port `1443` (`tg-ws-proxy` / `runet-fix-core`).
      - **Crucial**: The original destination IP is preserved in kernel socket state (`SO_ORIGINAL_DST`).
    - If packet is for general web traffic (YouTube, Discord, sites):
      - Passes to `forward` chain.
@@ -74,10 +89,10 @@ table inet runet_fix {
 ## 2. Transparent MTProto Obfuscated2 Translation
 
 ### 2.1 The Challenge
-Standard `tg-ws-proxy` requires clients to connect via MTProxy Fake-TLS protocol (`ee...` secret). Direct Telegram clients connecting to Telegram DCs use raw **MTProto 2.0 Obfuscated2** without proxy headers.
+Standard MTProxy implementations require clients to connect via MTProxy Fake-TLS protocol (`ee...` secret). Direct Telegram clients connecting to Telegram DCs use raw **MTProto 2.0 Obfuscated2** without proxy headers.
 
 ### 2.2 The Solution
-`tg-transproxy` intercepts direct MTProto connections and translates them into WebSocket frames:
+`tg-ws-proxy` (native Rust daemon in `runet-fix-core`) intercepts direct MTProto connections and translates them into WebSocket frames:
 
 ```
 [ Telegram Client (LAN) ] 
@@ -86,7 +101,7 @@ Standard `tg-ws-proxy` requires clients to connect via MTProxy Fake-TLS protocol
 [ nftables PREROUTING :1443 ]
        │ getsockopt(SOL_IP, SO_ORIGINAL_DST) -> 149.154.167.51:443 (DC2)
        ▼
-[ tg-transproxy Daemon ]
+[ tg-ws-proxy Daemon ]
        │ 1. Read 64-byte handshake
        │ 2. Extract: prekey = buf[8:40], iv = buf[40:56]
        │ 3. Decrypt: AES-256-CTR(prekey, iv)

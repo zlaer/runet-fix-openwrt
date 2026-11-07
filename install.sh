@@ -38,6 +38,33 @@ pkg_install() {
     fi
 }
 
+# Safe TLS-first download with fallback for uncalibrated router clocks before NTP sync
+safe_download() {
+    local url="$1"
+    local output="$2"
+    if curl -s -f -L --connect-timeout 8 "$url" -o "$output" 2>/dev/null; then
+        return 0
+    fi
+    curl -s -f -k -L --connect-timeout 8 "$url" -o "$output"
+}
+
+# Verify file against SHA256 checksum
+verify_sha256() {
+    local file="$1"
+    local expected_hash="$2"
+    [ -z "$expected_hash" ] && return 0
+    if command -v sha256sum >/dev/null 2>&1; then
+        local actual_hash=$(sha256sum "$file" | awk '{print $1}')
+        if [ "$actual_hash" != "$expected_hash" ]; then
+            echo "${RED}Security Warning: SHA256 verification failed for $file!${NC}" >&2
+            echo "Expected: $expected_hash" >&2
+            echo "Actual:   $actual_hash" >&2
+            return 1
+        fi
+    fi
+    return 0
+}
+
 # Detect architecture reliably across all OpenWrt releases
 ARCH=""
 if [ -f /etc/openwrt_release ]; then
@@ -63,7 +90,7 @@ echo "${YELLOW}[2/5] Installing prerequisite kernel modules and tools...${NC}"
 pkg_install ipset curl ca-bundle $FW_PKGS
 
 # Optional python or native binary support
-if ! command -v python3 >/dev/null 2>&1 && [ ! -f /usr/bin/tg-transproxy ] && [ ! -f /usr/bin/tg-ws-proxy ]; then
+if ! command -v python3 >/dev/null 2>&1 && [ ! -f /usr/bin/runet-fix-core ] && [ ! -f /usr/bin/tg-ws-proxy ]; then
     echo "${YELLOW}Installing lightweight Python 3 for Telegram WS proxy fallback...${NC}"
     pkg_install python3-base python3-asyncio python3-ssl
 fi
@@ -94,7 +121,7 @@ else
     TMP_INSTALL="/tmp/runet-fix-install"
     rm -rf "$TMP_INSTALL"
     mkdir -p "$TMP_INSTALL"
-    if curl -s -k -L "https://github.com/zlaer/runet-fix-openwrt/archive/refs/heads/master.tar.gz" -o "$TMP_INSTALL/master.tar.gz"; then
+    if safe_download "https://github.com/zlaer/runet-fix-openwrt/archive/refs/heads/master.tar.gz" "$TMP_INSTALL/master.tar.gz"; then
         tar -xzf "$TMP_INSTALL/master.tar.gz" -C "$TMP_INSTALL/"
         SRC=$(find "$TMP_INSTALL" -maxdepth 1 -type d -name "runet-fix-openwrt*" | head -n 1)
         if [ -n "$SRC" ] && [ -d "$SRC/files" ]; then
@@ -172,16 +199,36 @@ if [ -n "$TG_ARCH" ]; then
         INSTALLED_CORE=1
     else
         echo "Downloading native runet-fix-core for $TG_ARCH..."
-        if curl -s -L -k "$CORE_BIN_URL/runet-fix-$TG_ARCH" -o /usr/bin/runet-fix-core; then
+        if safe_download "$CORE_BIN_URL/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core; then
             INSTALLED_CORE=1
-        elif curl -s -L -k "$CORE_BIN_URL/tg-ws-proxy-$TG_ARCH" -o /usr/bin/runet-fix-core; then
+        elif safe_download "$CORE_BIN_URL/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core; then
             INSTALLED_CORE=1
         fi
     fi
 
     if [ "$INSTALLED_CORE" = "1" ] && [ -f /usr/bin/runet-fix-core ]; then
-        chmod +x /usr/bin/runet-fix-core 2>/dev/null || true
-        ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
+        # Check against SHA256SUMS if present
+        sum_file=""
+        if [ -f "$REPO_DIR/prebuilt/SHA256SUMS" ]; then
+            sum_file="$REPO_DIR/prebuilt/SHA256SUMS"
+        elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/SHA256SUMS" ]; then
+            sum_file="$SRC/prebuilt/SHA256SUMS"
+        fi
+        if [ -n "$sum_file" ]; then
+            exp_hash=$(grep "runet-fix-$TG_ARCH" "$sum_file" 2>/dev/null | awk '{print $1}')
+            [ -z "$exp_hash" ] && exp_hash=$(grep "tg-ws-proxy-$TG_ARCH" "$sum_file" 2>/dev/null | awk '{print $1}')
+            if [ -n "$exp_hash" ]; then
+                if ! verify_sha256 /usr/bin/runet-fix-core "$exp_hash"; then
+                    echo "${RED}Integrity check failed: aborting native binary deployment.${NC}"
+                    rm -f /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
+                    INSTALLED_CORE=0
+                fi
+            fi
+        fi
+        if [ "$INSTALLED_CORE" = "1" ]; then
+            chmod +x /usr/bin/runet-fix-core 2>/dev/null || true
+            ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
+        fi
     fi
 fi
 

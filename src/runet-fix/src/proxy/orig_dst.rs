@@ -17,6 +17,7 @@ const SO_ORIGINAL_DST: libc::c_int = 80;
 #[cfg(target_os = "linux")]
 const SO_MARK: libc::c_int = 36;
 
+#[allow(dead_code)]
 pub const DEFAULT_OUTBOUND_MARK: u32 = 0x40000000;
 
 /// Retrieves the original destination address from a redirected connection using SO_ORIGINAL_DST.
@@ -56,11 +57,6 @@ pub fn get_original_dst(stream: &TcpStream) -> io::Result<SocketAddrV4> {
     }
 }
 
-/// Sets the socket routing mark (SO_MARK) on an outbound connection.
-///
-/// Essential for OpenWrt to prevent routing loops: the proxy's own outbound
-/// TCP/WebSocket traffic to Cloudflare or Telegram must not be matched by
-/// prerouting redirect or nfqws DPI queues.
 /// Sets the socket routing mark (SO_MARK) on an outbound file descriptor.
 ///
 /// Essential for OpenWrt to prevent routing loops: the proxy's own outbound
@@ -84,10 +80,12 @@ pub fn set_outbound_mark_fd(fd: std::os::unix::io::RawFd, mark: u32) -> io::Resu
 }
 
 #[cfg(not(target_os = "linux"))]
+#[allow(dead_code)]
 pub fn set_outbound_mark_fd(_fd: std::os::raw::c_int, _mark: u32) -> io::Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn set_outbound_mark(stream: &TcpStream, mark: u32) -> io::Result<()> {
     #[cfg(target_os = "linux")]
     {
@@ -133,5 +131,33 @@ pub fn default_ip_for_dc(dc: u8) -> &'static str {
         4 => "149.154.167.91",
         5 => "91.108.56.165",
         _ => "149.154.167.51",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dc_from_ip() {
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 175, 50)), 1);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 167, 51)), 2);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 166, 1)), 2);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 175, 100)), 3);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 165, 10)), 4);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 164, 20)), 4);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(91, 108, 56, 165)), 5);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(91, 108, 4, 1)), 5);
+        // Fallback
+        assert_eq!(dc_from_ip(Ipv4Addr::new(8, 8, 8, 8)), 2);
+    }
+
+    #[test]
+    fn test_default_ip_for_dc() {
+        assert_eq!(default_ip_for_dc(1), "149.154.175.50");
+        assert_eq!(default_ip_for_dc(2), "149.154.167.51");
+        assert_eq!(default_ip_for_dc(3), "149.154.175.100");
+        assert_eq!(default_ip_for_dc(4), "149.154.167.91");
+        assert_eq!(default_ip_for_dc(5), "91.108.56.165");
     }
 }

@@ -29,6 +29,7 @@ pub struct AppConfig {
 
     /// fake TLS SNI masking domain (optional)
     #[argh(option)]
+    #[allow(dead_code)]
     pub fake_tls_domain: Option<String>,
 
     /// log level: info, debug, warn, error (default: info)
@@ -90,4 +91,52 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_hex_decode() {
+        assert_eq!(hex_decode("01020a"), Some(vec![0x01, 0x02, 0x0a]));
+        assert_eq!(hex_decode("invalid"), None);
+        assert_eq!(hex_decode("123"), None);
+    }
+
+    #[test]
+    fn test_secret_parsing() {
+        let mut cfg = AppConfig {
+            port: 1443,
+            listen: "0.0.0.0".to_string(),
+            secret: Some("75febd06a20f38f1d1151919a0540b13".to_string()),
+            pool_size: 2,
+            domains: None,
+            workers: None,
+            fake_tls_domain: None,
+            log_level: "info".to_string(),
+        };
+        assert_eq!(cfg.get_secret_bytes().unwrap().len(), 16);
+
+        // Prepend dd (Fake-TLS prefix)
+        cfg.secret = Some("dd75febd06a20f38f1d1151919a0540b13".to_string());
+        assert_eq!(cfg.get_secret_bytes().unwrap().len(), 16);
+    }
+
+    #[test]
+    fn test_domain_list_parsing() {
+        let cfg = AppConfig {
+            port: 1443,
+            listen: "0.0.0.0".to_string(),
+            secret: None,
+            pool_size: 2,
+            domains: Some("a.com, b.com; c.com".to_string()),
+            workers: Some("w1.workers.dev, w2.workers.dev".to_string()),
+            fake_tls_domain: None,
+            log_level: "info".to_string(),
+        };
+
+        assert_eq!(cfg.get_domain_list(), vec!["a.com", "b.com", "c.com"]);
+        assert_eq!(cfg.get_worker_list(), vec!["w1.workers.dev", "w2.workers.dev"]);
+    }
 }

@@ -163,8 +163,11 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.4.1';
-			}).catch(function() { return '1.4.1'; })
+				return (res || '').trim() || '1.4.2';
+			}).catch(function() { return '1.4.2'; }),
+			fs.read('/tmp/tg-ws-proxy-stats.json').then(function(res) {
+				try { return JSON.parse(res || '{}'); } catch(e) { return {}; }
+			}).catch(function() { return {}; })
 		]);
 	},
 
@@ -186,7 +189,8 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.4.1';
+		var currentVersion = data[3] || '1.4.2';
+		var tgStats = data[4] || {};
 
 		// Attach global window handlers with closures to fs and translations
 		window.setRunetFixLang = function(lang) {
@@ -481,8 +485,13 @@ return view.extend({
 				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.running + ' (PID ' + zapretPid + ')</span>' :
 				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.stopped + '</span>';
 
+			var tgExtra = (telegramRunning && tgStats.total_sessions !== undefined) ?
+				'<span style="font-size:12px;color:#28a745;margin-left:6px;font-weight:normal;">(' +
+				(curLang === 'ru' ? 'сессий: ' : 'sessions: ') + (tgStats.active_sessions || 0) + ' ' +
+				(curLang === 'ru' ? 'акт., всего: ' : 'act., total: ') + (tgStats.total_sessions || 0) + ')</span>' : '';
+
 			var tgBadge = telegramRunning ?
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (PID ' + telegramPid + ')</span>' :
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (PID ' + telegramPid + ')</span>' + tgExtra :
 				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.stopped + '</span>';
 
 			var adblockBadge = adblockRules > 0 ?

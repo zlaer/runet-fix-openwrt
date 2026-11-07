@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::sync::Arc;
 
 #[cfg(unix)]
@@ -15,6 +16,7 @@ use crate::proxy::pool::WsConnectionPool;
 #[cfg(unix)]
 use crate::proxy::{ACTIVE_SESSIONS, POOL_HITS, POOL_MISSES, TOTAL_SESSIONS};
 
+#[cfg(unix)]
 pub const IPC_SOCKET_PATH: &str = "/var/run/runet-fix.sock";
 
 #[cfg(unix)]
@@ -68,7 +70,7 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
                             .unwrap_or_else(|| "youtube_4k".to_string());
 
                         format!(
-                            "{{\"status\":\"ok\",\"version\":\"1.4.1\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
+                            "{{\"status\":\"ok\",\"version\":\"1.4.2\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
                             uptime, active, total, hits, misses, adb_rules, preset
                         )
                     }

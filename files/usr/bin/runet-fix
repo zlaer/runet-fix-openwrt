@@ -3,7 +3,7 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.4.1"
+CURRENT_VERSION="1.4.2"
 [ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
 
 REPO_USER="zlaer"
@@ -11,6 +11,16 @@ REPO_NAME="runet-fix-openwrt"
 REPO_BRANCH="master"
 GITHUB_RAW="https://raw.githubusercontent.com/$REPO_USER/$REPO_NAME/$REPO_BRANCH"
 GITHUB_API="https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest"
+
+safe_download() {
+    local url="$1"
+    local output="$2"
+    local timeout="${3:-30}"
+    if curl -s -f -L -m "$timeout" "$url" -o "$output" 2>/dev/null; then
+        return 0
+    fi
+    curl -s -f -k -L -m "$timeout" "$url" -o "$output"
+}
 
 if [ -x /usr/bin/runet-fix-core ]; then
     case "$1" in
@@ -101,7 +111,7 @@ EOF
 
         TARBALL_URL="https://github.com/$REPO_USER/$REPO_NAME/archive/refs/heads/$REPO_BRANCH.tar.gz"
         echo "Downloading update archive..."
-        if ! curl -s -k -L -m 60 "$TARBALL_URL" -o "$TMP_DIR/update.tar.gz"; then
+        if ! safe_download "$TARBALL_URL" "$TMP_DIR/update.tar.gz" 60; then
             echo "Error: Failed to download update archive from GitHub!"
             rm -rf "$TMP_DIR"
             exit 1
@@ -133,6 +143,34 @@ EOF
         cp -r "$SRC_DIR/files/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/ 2>/dev/null || true
         cp -r "$SRC_DIR/files/etc/init.d/runet-fix" /etc/init.d/
         [ -f "$SRC_DIR/version" ] && cp "$SRC_DIR/version" /usr/share/runet-fix/version
+
+        # Update native Rust core binary if applicable with SHA256 integrity check
+        ARCH=""
+        [ -f /etc/openwrt_release ] && . /etc/openwrt_release && ARCH="$DISTRIB_ARCH"
+        [ -z "$ARCH" ] && ARCH=$(uname -m 2>/dev/null || echo "unknown")
+        TG_ARCH=""
+        case "$ARCH" in
+            aarch64*|arm64) TG_ARCH="aarch64" ;;
+            arm_cortex*|armhf|armv7*) TG_ARCH="armv7" ;;
+            x86_64|amd64) TG_ARCH="x86_64" ;;
+        esac
+        if [ -n "$TG_ARCH" ] && [ -f "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" ]; then
+            can_copy=1
+            if [ -f "$SRC_DIR/prebuilt/SHA256SUMS" ] && command -v sha256sum >/dev/null 2>&1; then
+                exp_hash=$(grep "runet-fix-$TG_ARCH" "$SRC_DIR/prebuilt/SHA256SUMS" 2>/dev/null | awk '{print $1}')
+                act_hash=$(sha256sum "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" | awk '{print $1}')
+                if [ -n "$exp_hash" ] && [ "$exp_hash" != "$act_hash" ]; then
+                    echo "Security Warning: Checksum mismatch for binary runet-fix-$TG_ARCH! Skipping binary update."
+                    can_copy=0
+                fi
+            fi
+            if [ "$can_copy" = "1" ]; then
+                echo "Updating native binary runet-fix-$TG_ARCH..."
+                cp "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core
+                chmod +x /usr/bin/runet-fix-core
+                ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
+            fi
+        fi
 
         # Restore custom lists preserving user additions
         if [ -d "$TMP_DIR/lists.bak" ]; then

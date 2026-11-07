@@ -68,15 +68,36 @@ pub fn get_zapret_args(preset: &str, custom: Option<&str>) -> String {
         "general_fake_tls_auto" => {
             "--dpi-desync=fake,multidisorder --dpi-desync-split-pos=1,midsld --dpi-desync-repeats=11 --dpi-desync-fooling=badseq --dpi-desync-fake-tls=0x00000000".to_string()
         }
+        "general_fake_tls_alt" => {
+            format!("--dpi-desync=fake,fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-repeats=8 --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir)
+        }
+        "general_fake_tls_alt2" => {
+            format!("--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=10000000 --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir)
+        }
+        "general_fake_tls_alt3" => {
+            format!("--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8 --dpi-desync-split-seqovl-pattern={}/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir)
+        }
+        "general_simple_fake" => {
+            format!("--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls={}/tls_clienthello_www_google_com.bin --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir)
+        }
+        "general_simple_fake_alt" => {
+            format!("--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-badseq-increment=2 --dpi-desync-fake-tls={}/stun2.bin --dpi-desync-fake-tls={}/tls_clienthello_www_google_com.bin --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir, bin_dir)
+        }
+        "general_simple_fake_alt2" => {
+            format!("--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=ts --dpi-desync-fake-tls={}/stun2.bin --dpi-desync-fake-tls={}/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir, bin_dir)
+        }
+        "general_exp" => {
+            format!("--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=480 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=4 --dpi-desync-split-seqovl-pattern={}/stun2.bin --dpi-desync-fake-tls={}/tls_clienthello_www_sferum_ru.bin --dpi-desync-fake-http={}/tls_clienthello_www_sferum_ru.bin", bin_dir, bin_dir, bin_dir)
+        }
         "flowseal_general" => {
-            format!("--dpi-desync=fake,multisplit --dpi-desync-split-seqovl=664 --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6 --dpi-desync-fake-tls={}/tls_clienthello_www_google_com.bin", bin_dir)
+            format!("--dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={}/tls_clienthello_4pda_to.bin", bin_dir)
         }
         "custom" => {
             custom.unwrap_or("").to_string()
         }
         _ => {
-            // Default: youtube_4k
-            "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6".to_string()
+            // Default: flowseal_general
+            format!("--dpi-desync=multisplit --dpi-desync-split-seqovl=568 --dpi-desync-split-pos=1 --dpi-desync-split-seqovl-pattern={}/tls_clienthello_4pda_to.bin", bin_dir)
         }
     }
 }
@@ -86,4 +107,61 @@ pub fn print_args(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let custom = args.get(1).map(|s| s.as_str());
     println!("{}", get_zapret_args(preset, custom));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_presets_return_valid_arguments() {
+        let presets = [
+            "youtube_4k",
+            "fakedsplit_badseq",
+            "multisplit_badsum",
+            "disorder2_badseq",
+            "split2_pos2",
+            "wsize_badsum",
+            "tls_cutoff",
+            "discord_fix",
+            "general_alt",
+            "general_alt2",
+            "general_alt3",
+            "general_alt4",
+            "general_alt5",
+            "general_alt6",
+            "general_alt7",
+            "general_alt8",
+            "general_alt9",
+            "general_alt10",
+            "general_alt11",
+            "general_alt12",
+            "general_alt13",
+            "general_fake_tls_auto",
+            "general_fake_tls_alt",
+            "general_fake_tls_alt2",
+            "general_fake_tls_alt3",
+            "general_simple_fake",
+            "general_simple_fake_alt",
+            "general_simple_fake_alt2",
+            "general_exp",
+            "flowseal_general",
+        ];
+
+        for p in presets {
+            let args = get_zapret_args(p, None);
+            assert!(!args.is_empty(), "Preset {} returned empty args", p);
+            assert!(args.contains("--dpi-desync"), "Preset {} missing --dpi-desync", p);
+        }
+    }
+
+    #[test]
+    fn test_custom_preset() {
+        let custom = "--custom-flag=123";
+        let res = get_zapret_args("custom", Some(custom));
+        assert_eq!(res, custom);
+
+        let empty = get_zapret_args("custom", None);
+        assert_eq!(empty, "");
+    }
 }
