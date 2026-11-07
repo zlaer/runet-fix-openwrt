@@ -384,7 +384,7 @@ update_adblock() {
 
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    local ver="1.5.1"
+    local ver="1.5.2"
     [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
     echo "=== [runet-fix v$ver] All-in-One Status ==="
 

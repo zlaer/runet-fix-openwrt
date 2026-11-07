@@ -163,8 +163,8 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.5.1';
-			}).catch(function() { return '1.5.1'; }),
+				return (res || '').trim() || '1.5.2';
+			}).catch(function() { return '1.5.2'; }),
 			fs.read('/tmp/tg-ws-proxy-stats.json').then(function(res) {
 				try { return JSON.parse(res || '{}'); } catch(e) { return {}; }
 			}).catch(function() { return {}; }),
@@ -193,7 +193,7 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.5.1';
+		var currentVersion = data[3] || '1.5.2';
 		var tgStats = data[4] || {};
 
 		// Attach global window handlers with closures to fs and translations

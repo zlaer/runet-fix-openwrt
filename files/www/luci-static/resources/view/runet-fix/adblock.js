@@ -9,7 +9,6 @@ var I18N = {
 	ru: {
 		title: 'Умный Adblock (интеграция с dnsmasq)',
 		desc: 'Сверхлегкая блокировка рекламы и трекеров на уровне DNS. Загружает качественные фильтры прямо в dnsmasq без расхода оперативной памяти.',
-		lang_label: 'Язык:',
 		section_conf: 'Настройки Adblock',
 		enable: 'Включить блокировку рекламы',
 		enable_desc: 'Блокирует рекламные домены через конфигурацию адресов dnsmasq.',
@@ -41,7 +40,6 @@ var I18N = {
 	en: {
 		title: 'Smart Adblock (dnsmasq integration)',
 		desc: 'Ultra-lightweight DNS-level ad and tracking blocker. Loads high-quality filter lists directly into OpenWrt dnsmasq with zero background memory overhead.',
-		lang_label: 'Language:',
 		section_conf: 'Adblock Configuration',
 		enable: 'Enable Adblock',
 		enable_desc: 'Applies domain-level blocking via dnsmasq address configuration.',
@@ -97,41 +95,7 @@ return view.extend({
 		var blacklistContent = data[2] || '';
 		var totalBlocked = data[3] || 0;
 
-		window.setRunetFixLang = function(lang) {
-			localStorage.setItem('runet_fix_lang', lang);
-			location.reload();
-		};
-
 		var m = new form.Map('runet-fix', t.title, t.desc);
-
-		// Top language bar
-		var s_top = m.section(form.NamedSection, 'adblock', 'adblock');
-		s_top.render = function() {
-			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			return E('div', {
-				'style': 'display:flex;justify-content:flex-end;align-items:center;margin-bottom:12px;gap:8px;'
-			}, [
-				E('span', { 'style': 'font-size:13px;color:#888;font-weight:bold;' }, t.lang_label),
-				E('div', {
-					'class': 'btn-group',
-					'style': 'display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;'
-				}, [
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle,
-						'click': function() { window.setRunetFixLang('ru'); }
-					}, 'RU'),
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle,
-						'click': function() { window.setRunetFixLang('en'); }
-					}, 'ENG')
-				])
-			]);
-		};
 
 		var s = m.section(form.NamedSection, 'adblock', 'adblock', t.section_conf);
 

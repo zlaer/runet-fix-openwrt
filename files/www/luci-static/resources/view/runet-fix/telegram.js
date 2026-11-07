@@ -9,7 +9,6 @@ var I18N = {
 	ru: {
 		title: 'Прозрачный шлюз Telegram (Без настройки на устройствах)',
 		desc: 'Автоматически перехватывает и туннелирует трафик Telegram на уровне роутера. На смартфонах, компьютерах и Smart TV настраивать прокси НЕ нужно — Telegram работает штатно для всех устройств в домашней сети.',
-		lang_label: 'Язык:',
 		section_title: 'Параметры прозрачного шлюза',
 		enable: 'Включить прозрачный шлюз Telegram',
 		enable_desc: 'Файрвол роутера автоматически перехватывает соединения к дата-центрам Telegram и туннелирует их в обход ТСПУ.',
@@ -39,7 +38,6 @@ var I18N = {
 	en: {
 		title: 'Telegram Transparent Gateway (Zero Client Configuration)',
 		desc: 'Automatically intercepts and tunnels Telegram traffic at the router level. No proxy configuration is required on phones, PCs, or Smart TVs — Telegram works out-of-the-box for all LAN devices.',
-		lang_label: 'Language:',
 		section_title: 'Transparent Gateway Parameters',
 		enable: 'Enable Telegram Transparent Gateway',
 		enable_desc: 'Router firewall intercepts outgoing Telegram DC traffic and tunnels it around ISP throttling.',
@@ -77,41 +75,7 @@ return view.extend({
 		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
 		var t = I18N[curLang];
 
-		window.setRunetFixLang = function(lang) {
-			localStorage.setItem('runet_fix_lang', lang);
-			location.reload();
-		};
-
 		var m = new form.Map('runet-fix', t.title, t.desc);
-
-		// Top language bar
-		var s_top = m.section(form.NamedSection, 'telegram', 'telegram');
-		s_top.render = function() {
-			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			return E('div', {
-				'style': 'display:flex;justify-content:flex-end;align-items:center;margin-bottom:12px;gap:8px;'
-			}, [
-				E('span', { 'style': 'font-size:13px;color:#888;font-weight:bold;' }, t.lang_label),
-				E('div', {
-					'class': 'btn-group',
-					'style': 'display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;'
-				}, [
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle,
-						'click': function() { window.setRunetFixLang('ru'); }
-					}, 'RU'),
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle,
-						'click': function() { window.setRunetFixLang('en'); }
-					}, 'ENG')
-				])
-			]);
-		};
 
 		var s = m.section(form.NamedSection, 'telegram', 'telegram', t.section_title);
 

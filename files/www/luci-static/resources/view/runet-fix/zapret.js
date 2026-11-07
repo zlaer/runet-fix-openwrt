@@ -9,7 +9,6 @@ var I18N = {
 	ru: {
 		title: 'Zapret (Обход блокировок DPI)',
 		desc: 'Настройка десинхронизации пакетов nfqws для ускорения YouTube 4K, Discord и заблокированных сайтов.',
-		lang_label: 'Язык:',
 		section_engine: 'Настройки движка Zapret',
 		enable_zapret: 'Включить движок Zapret DPI',
 		enable_zapret_desc: 'Направляет исходящий трафик в очередь Netfilter для десинхронизации пакетов.',
@@ -55,7 +54,6 @@ var I18N = {
 	en: {
 		title: 'Zapret (DPI Circumvention)',
 		desc: 'Configures nfqws packet desynchronization for unthrottling YouTube 4K, Discord voice & media, and ISP-blocked sites.',
-		lang_label: 'Language:',
 		section_engine: 'Zapret Engine Settings',
 		enable_zapret: 'Enable Zapret DPI Engine',
 		enable_zapret_desc: 'Directs selected outgoing TCP/UDP traffic to Netfilter queue for desynchronization.',
@@ -117,41 +115,7 @@ return view.extend({
 		var hostlistContent = data[1] || '';
 		var excludelistContent = data[2] || '';
 
-		window.setRunetFixLang = function(lang) {
-			localStorage.setItem('runet_fix_lang', lang);
-			location.reload();
-		};
-
 		var m = new form.Map('runet-fix', t.title, t.desc);
-
-		// Top language bar
-		var s_top = m.section(form.NamedSection, 'zapret', 'zapret');
-		s_top.render = function() {
-			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			return E('div', {
-				'style': 'display:flex;justify-content:flex-end;align-items:center;margin-bottom:12px;gap:8px;'
-			}, [
-				E('span', { 'style': 'font-size:13px;color:#888;font-weight:bold;' }, t.lang_label),
-				E('div', {
-					'class': 'btn-group',
-					'style': 'display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;'
-				}, [
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle,
-						'click': function() { window.setRunetFixLang('ru'); }
-					}, 'RU'),
-					E('button', {
-						'type': 'button',
-						'class': 'btn',
-						'style': 'padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle,
-						'click': function() { window.setRunetFixLang('en'); }
-					}, 'ENG')
-				])
-			]);
-		};
 
 		// 1. Zapret Engine Settings Section
 		var s = m.section(form.NamedSection, 'zapret', 'zapret', t.section_engine);

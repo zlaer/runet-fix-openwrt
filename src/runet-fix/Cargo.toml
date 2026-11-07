@@ -1,6 +1,6 @@
 [package]
 name = "runet-fix"
-version = "1.5.1"
+version = "1.5.2"
 edition = "2021"
 authors = ["Runet-Fix Contributors"]
 description = "High-performance, modular all-in-one DPI bypass, Telegram transparent gateway and Adblock compiler for OpenWrt"
