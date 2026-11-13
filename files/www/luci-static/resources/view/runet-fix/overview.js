@@ -117,10 +117,15 @@ return view.extend({
 			fs.exec('/usr/bin/runet-fix', ['update']).then(function(res) {
 				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
-				ui.addNotification(null, E('p', _('Update installed successfully! Reloading page...')), 'info');
-				setTimeout(function() {
-					location.reload();
-				}, 2500);
+				if (res && res.code === 0) {
+					ui.addNotification(null, E('p', _('Update installed successfully! Reloading page...')), 'info');
+					setTimeout(function() {
+						location.reload();
+					}, 2500);
+				} else {
+					var errMsg = (res && (res.stderr || res.stdout)) ? (res.stderr || res.stdout).trim() : (_('Command exited with code ') + (res ? res.code : 'unknown'));
+					ui.addNotification(null, E('p', _('Update failed: ') + errMsg), 'error');
+				}
 			}).catch(function(err) {
 				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();

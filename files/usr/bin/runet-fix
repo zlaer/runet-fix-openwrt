@@ -16,7 +16,18 @@ safe_download() {
     local url="$1"
     local output="$2"
     local timeout="${3:-30}"
-    curl -s -f -L -m "$timeout" "$url" -o "$output"
+    if command -v curl >/dev/null 2>&1; then
+        if curl -s -f -L -m "$timeout" "$url" -o "$output"; then
+            return 0
+        fi
+        curl -s -f -k -L -m "$timeout" "$url" -o "$output"
+    elif command -v uclient-fetch >/dev/null 2>&1; then
+        uclient-fetch --no-check-certificate -q -T "$timeout" "$url" -O "$output"
+    elif command -v wget >/dev/null 2>&1; then
+        wget --no-check-certificate -q -T "$timeout" "$url" -O "$output"
+    else
+        return 1
+    fi
 }
 
 if [ -x /usr/bin/runet-fix-core ]; then
@@ -153,7 +164,13 @@ EOF
             exit 1
         fi
 
-        SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d \( -name "$REPO_NAME-*" -o -name "runet-fix*" \) | head -n 1)
+        SRC_DIR=""
+        for d in "$TMP_DIR"/"$REPO_NAME"-* "$TMP_DIR"/runet-fix* "$TMP_DIR"/*; do
+            if [ -d "$d/files" ] && [ -d "$d/files/usr/share/runet-fix" ]; then
+                SRC_DIR="$d"
+                break
+            fi
+        done
         if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/files" ] || [ ! -d "$SRC_DIR/files/usr/share/runet-fix" ]; then
             echo "Error: Invalid update package structure!"
             rm -rf "$TMP_DIR"
@@ -224,20 +241,29 @@ EOF
             arm_cortex*|armhf|armv7*) TG_ARCH="armv7" ;;
             x86_64|amd64) TG_ARCH="x86_64" ;;
         esac
-        if [ -n "$TG_ARCH" ] && [ -f "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" ]; then
-            can_copy=1
-            if [ -f "$SRC_DIR/prebuilt/SHA256SUMS" ] && command -v sha256sum >/dev/null 2>&1; then
-                exp_hash=$(grep "runet-fix-$TG_ARCH" "$SRC_DIR/prebuilt/SHA256SUMS" 2>/dev/null | awk '{print $1}')
-                act_hash=$(sha256sum "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" | awk '{print $1}')
-                if [ -n "$exp_hash" ] && [ "$exp_hash" != "$act_hash" ]; then
-                    echo "Security Warning: Checksum mismatch for binary runet-fix-$TG_ARCH! Skipping binary update."
-                    can_copy=0
+        if [ -n "$TG_ARCH" ]; then
+            RELEASE_BIN_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download"
+            TMP_BIN="$TMP_DIR/runet-fix-$TG_ARCH"
+            can_copy=0
+            if safe_download "$RELEASE_BIN_URL/runet-fix-$TG_ARCH" "$TMP_BIN" 120 && [ -s "$TMP_BIN" ]; then
+                can_copy=1
+                if safe_download "$RELEASE_BIN_URL/SHA256SUMS" "$TMP_DIR/SHA256SUMS" 15 && command -v sha256sum >/dev/null 2>&1; then
+                    exp_hash=$(grep "runet-fix-$TG_ARCH" "$TMP_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}')
+                    act_hash=$(sha256sum "$TMP_BIN" | awk '{print $1}')
+                    if [ -n "$exp_hash" ] && [ "$exp_hash" != "$act_hash" ]; then
+                        echo "Security Warning: Checksum mismatch for binary runet-fix-$TG_ARCH! Skipping binary update."
+                        can_copy=0
+                    fi
                 fi
+            elif [ -f "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" ]; then
+                cp "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" "$TMP_BIN"
+                can_copy=1
             fi
-            if [ "$can_copy" = "1" ]; then
+            if [ "$can_copy" = "1" ] && [ -s "$TMP_BIN" ]; then
                 echo "Updating native binary runet-fix-$TG_ARCH..."
-                cp "$SRC_DIR/prebuilt/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core
-                chmod +x /usr/bin/runet-fix-core
+                cp "$TMP_BIN" /usr/bin/runet-fix-core.new
+                chmod +x /usr/bin/runet-fix-core.new
+                mv -f /usr/bin/runet-fix-core.new /usr/bin/runet-fix-core
                 ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
             fi
         fi

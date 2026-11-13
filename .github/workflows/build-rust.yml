@@ -203,8 +203,9 @@ jobs:
         run: |
           mkdir -p release_assets
           find artifacts -type f -exec cp {} release_assets/ \;
+          tar -czf release_assets/runet-fix.tar.gz files Makefile version README.md install.sh
           cd release_assets
-          sha256sum runet-fix-* tg-ws-proxy-* > SHA256SUMS
+          sha256sum runet-fix-* tg-ws-proxy-* runet-fix.tar.gz > SHA256SUMS
           chmod +x runet-fix-* tg-ws-proxy-* || true
           ls -lh
 
@@ -218,6 +219,7 @@ jobs:
             release_assets/tg-ws-proxy-aarch64
             release_assets/tg-ws-proxy-armv7
             release_assets/tg-ws-proxy-x86_64
+            release_assets/runet-fix.tar.gz
             release_assets/SHA256SUMS
           generate_release_notes: true
 
