@@ -10,6 +10,9 @@ discord.gg
 discordapp.com
 github.com
 githubusercontent.com
+githubassets.com
+jsdelivr.net
+unpkg.com
 cloudflare.com
 yandex.ru
 ya.ru
