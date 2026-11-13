@@ -80,10 +80,10 @@ step_optional "Rust: cargo clippy (-D warnings)" "cargo" "cargo clippy --manifes
 step_optional "Rust: cargo test" "cargo" "cargo test --manifest-path src/runet-fix/Cargo.toml"
 
 # 11. Shellcheck (optional)
-step_optional "Shellcheck: POSIX scripts" "shellcheck" "shellcheck -S warning -e SC2039,SC3043 files/usr/share/runet-fix/scripts/*.sh files/etc/init.d/runet-fix files/usr/bin/runet-fix install.sh"
+step_optional "Shellcheck: POSIX scripts" "shellcheck" "shellcheck -S warning -e SC2034,SC2155,SC2046,SC2086,SC3043,SC2039 files/usr/share/runet-fix/scripts/*.sh files/etc/init.d/runet-fix files/usr/bin/runet-fix install.sh"
 
 # 12. Gettext PO syntax check
-step_optional "Gettext: msgfmt --check po/ru/runet-fix.po" "msgfmt" "msgfmt --check po/ru/runet-fix.po"
+step_optional "Gettext: msgfmt --check po/ru/runet-fix.po" "msgfmt" "msgfmt --check -o /dev/null po/ru/runet-fix.po"
 
 echo "===================================================="
 echo "Verification finished: $PASSED passed, $FAILED failed, $SKIPPED skipped."

@@ -101,7 +101,7 @@ filter_exclusions() {
 
 # Determine firewall implementation
 is_fw4() {
-    command -v nft >/dev/null 2>&1 && [ -f /etc/nftables.d/README -o -f /usr/share/firewall4/main.nft ]
+    command -v nft >/dev/null 2>&1 && { [ -f /etc/nftables.d/README ] || [ -f /usr/share/firewall4/main.nft ]; }
 }
 
 # Telegram IP subnets (IPv4 and IPv6)

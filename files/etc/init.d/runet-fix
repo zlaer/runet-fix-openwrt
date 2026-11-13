@@ -195,6 +195,7 @@ start_service() {
             local custom_args=$(uci -q get runet-fix.zapret.custom_args || echo "")
             local mode=$(uci -q get runet-fix.zapret.mode || echo "all")
             local autohost_legacy=$(uci -q get runet-fix.zapret.autohostlist || echo "0")
+            local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
             if [ "$mode" = "list" ] && [ "$autohost_legacy" = "1" ]; then
                 mode="list_auto"
             fi

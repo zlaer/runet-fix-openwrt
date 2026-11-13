@@ -371,21 +371,21 @@ EOF
         fi
 
         echo "=== [runet-fix Connectivity Diagnostics] ==="
-        echo -n "Checking DNS resolution (google.com)... "
+        printf "%s" "Checking DNS resolution (google.com)... "
         if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then echo "OK"; else echo "FAIL"; fi
 
-        echo -n "Checking Adblock NXDOMAIN (ad.ae.doubleclick.net)... "
+        printf "%s" "Checking Adblock NXDOMAIN (ad.ae.doubleclick.net)... "
         if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then echo "OK (Blocked)"; else echo "FAIL (Allowed)"; fi
 
-        echo -n "Testing YouTube HTTPS connection (port 443)... "
+        printf "%s" "Testing YouTube HTTPS connection (port 443)... "
         yt_test=$(curl -s -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "FAIL")
         echo "$yt_test"
 
-        echo -n "Testing Discord Gateway (gateway.discord.gg:443)... "
+        printf "%s" "Testing Discord Gateway (gateway.discord.gg:443)... "
         dc_test=$(curl -s -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "FAIL")
         echo "$dc_test"
 
-        echo -n "Testing Telegram local transparent proxy daemon (127.0.0.1:$tg_port)... "
+        printf "%s" "Testing Telegram local transparent proxy daemon (127.0.0.1:$tg_port)... "
         if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 "$tg_port" >/dev/null 2>&1; then
             echo "OK (Listening)"
         elif netstat -tlpn 2>/dev/null | grep -q ":$tg_port "; then
