@@ -13,143 +13,6 @@ var callServiceList = rpc.declare({
 	expect: { '': {} }
 });
 
-var I18N = {
-	ru: {
-		title: 'Runet Fix - Панель управления',
-		desc: 'Единый комплекс для OpenWrt: обход блокировок Zapret DPI, прозрачный WebSocket туннель Telegram и умная блокировка рекламы.',
-		lang_label: 'Язык:',
-		master_section: 'Главный переключатель и состояние системы',
-		enable_all: 'Включить все службы',
-		enable_all_desc: 'Глобально включает или отключает все подсистемы Runet-Fix.',
-		status_table: 'Состояние подсистем',
-		zapret_name: 'Zapret (YouTube 4K и Discord DPI)',
-		tg_name: 'Telegram Transparent Proxy',
-		tg_sub: '(Без настройки клиентов, для всей сети)',
-		adblock_name: 'dnsmasq Smart Adblock',
-		adblock_sub: '(Без фоновых демонов, экономия ОЗУ)',
-		running: 'РАБОТАЕТ',
-		active: 'АКТИВЕН',
-		stopped: 'ОСТАНОВЛЕН',
-		inactive: 'НЕАКТИВЕН',
-		domains: 'доменов',
-		version_row_name: 'Версия Runet-Fix',
-		version_label: 'Версия:',
-		btn_check_update: 'Проверить обновления',
-		btn_update: 'Обновить',
-		btn_update_now: 'Обновить до',
-		update_confirm: 'Выполнить обновление Runet-Fix с GitHub до последней версии?',
-		checking_update: 'Сверка с GitHub...',
-		up_to_date: 'Установлена последняя версия',
-		update_available: 'Доступно обновление',
-		updating_title: 'Обновление Runet-Fix',
-		updating_desc: 'Загрузка свежего релиза с GitHub, обновление бинарных файлов, скриптов и перезапуск сервисов...',
-		update_done: 'Обновление успешно установлено! Перезагрузка страницы...',
-		update_err: 'Ошибка при обновлении: ',
-		diag_section: 'Диагностика доступности сервисов (RuNet Health Probe)',
-		diag_title: 'Проверка сетевых сервисов в реальном времени',
-		diag_desc: 'Мгновенная проверка (1–2 сек): доступность YouTube 4K, Discord Gateway, Telegram туннеля и блокировки рекламы.',
-		btn_run_diag: 'Проверить сервисы (1 сек)',
-		btn_running_diag: 'Проверка...',
-		card_yt: 'YouTube 4K (DPI)',
-		card_dc: 'Discord Gateway',
-		card_tg: 'Telegram WebSocket',
-		card_dns: 'DNS и Adblock',
-		not_checked: 'Не проверялось',
-		checking: 'Проверка...',
-		available: 'Доступен',
-		blocked: 'Заблокирован',
-		unavailable: 'Недоступен',
-		connected: 'Подключен',
-		tg_tunnel_active: '(Туннель :1443 активен)',
-		blocking_active: '(Блокировка работает)',
-		dns_ok: 'DNS OK',
-		dns_err: 'Ошибка DNS',
-		resp_err: 'Ошибка ответа',
-		rpc_err: 'Ошибка RPC: ',
-		actions_section: 'Быстрые действия',
-		btn_restart: 'Перезапустить службы',
-		btn_update_adblock: 'Обновить Adblock',
-		btn_update_hosts: 'Обновить список Zapret',
-		btn_refresh: 'Обновить статус',
-		working: 'Выполняется...',
-		success: 'Успешно!',
-		error: 'Ошибка',
-		danger_section: 'Удаление Runet-Fix',
-		danger_desc: 'Полное и чистое удаление пакета Runet-Fix, остановка служб, сброс правил файрвола nftables, очистка cron и интерфейса LuCI.',
-		btn_uninstall: 'Полностью удалить Runet-Fix',
-		uninstall_confirm: 'Внимание! Вы действительно хотите полностью удалить Runet-Fix с роутера?\n\nБудут остановлены все службы, удалены правила файрвола nftables, очищен cron, удалены все скрипты, списки и веб-интерфейс LuCI.',
-		uninstalling: 'Удаление Runet-Fix с роутера...',
-		uninstall_done: 'Runet-Fix успешно удален. Перенаправление...'
-	},
-	en: {
-		title: 'Runet Fix - All-in-One Dashboard',
-		desc: 'Unified high-performance suite for OpenWrt: Zapret DPI bypass, Transparent Telegram WebSocket tunnel, and Smart Adblock.',
-		lang_label: 'Language:',
-		master_section: 'Master Switch & System Overview',
-		enable_all: 'Enable All Services',
-		enable_all_desc: 'Globally enables or disables all Runet-Fix subsystems.',
-		status_table: 'Subsystem Status',
-		zapret_name: 'Zapret (YouTube 4K & Discord DPI)',
-		tg_name: 'Telegram Transparent Proxy',
-		tg_sub: '(Zero-config for whole LAN)',
-		adblock_name: 'dnsmasq Smart Adblock',
-		adblock_sub: '(0 extra daemons, RAM optimized)',
-		running: 'RUNNING',
-		active: 'ACTIVE',
-		stopped: 'STOPPED',
-		inactive: 'INACTIVE',
-		domains: 'domains',
-		version_row_name: 'Runet-Fix Version',
-		version_label: 'Version:',
-		btn_check_update: 'Check for Updates',
-		btn_update: 'Update',
-		btn_update_now: 'Update to',
-		update_confirm: 'Update Runet-Fix from GitHub to the latest version?',
-		checking_update: 'Checking GitHub...',
-		up_to_date: 'Latest version installed',
-		update_available: 'Update available',
-		updating_title: 'Updating Runet-Fix',
-		updating_desc: 'Downloading latest release from GitHub, updating files and restarting services...',
-		update_done: 'Update installed successfully! Reloading page...',
-		update_err: 'Update error: ',
-		diag_section: 'Service Availability Diagnostics (RuNet Health Probe)',
-		diag_title: 'Real-Time Network Health Probe',
-		diag_desc: 'Instant verification (1–2 sec): YouTube 4K, Discord Gateway, Telegram tunnel, and adblock status.',
-		btn_run_diag: 'Test Services (1 sec)',
-		btn_running_diag: 'Testing...',
-		card_yt: 'YouTube 4K (DPI)',
-		card_dc: 'Discord Gateway',
-		card_tg: 'Telegram WebSocket',
-		card_dns: 'DNS & Adblock',
-		not_checked: 'Not checked',
-		checking: 'Testing...',
-		available: 'Available',
-		blocked: 'Blocked',
-		unavailable: 'Unavailable',
-		connected: 'Connected',
-		tg_tunnel_active: '(Tunnel :1443 active)',
-		blocking_active: '(Blocking active)',
-		dns_ok: 'DNS OK',
-		dns_err: 'DNS Error',
-		resp_err: 'Response error',
-		rpc_err: 'RPC Error: ',
-		actions_section: 'Quick Actions',
-		btn_restart: 'Restart Services',
-		btn_update_adblock: 'Update Adblock Now',
-		btn_update_hosts: 'Update Zapret Hosts',
-		btn_refresh: 'Refresh Status',
-		working: 'Working...',
-		success: 'Success!',
-		error: 'Error',
-		danger_section: 'Uninstall Runet-Fix',
-		danger_desc: 'Completely remove the Runet-Fix suite, stop all daemons, delete nftables firewall rules, clean cron schedule and LuCI web views.',
-		btn_uninstall: 'Completely Uninstall Runet-Fix',
-		uninstall_confirm: 'Warning! Are you sure you want to completely uninstall Runet-Fix from this router?\n\nAll services will be stopped, nftables rules removed, cron jobs cleaned, and all scripts, lists, and LuCI web views deleted.',
-		uninstalling: 'Uninstalling Runet-Fix from router...',
-		uninstall_done: 'Runet-Fix has been removed. Redirecting...'
-	}
-};
-
 return view.extend({
 	load: function() {
 		return Promise.all([
@@ -163,8 +26,8 @@ return view.extend({
 				}).catch(function() { return 0; });
 			}),
 			fs.read('/usr/share/runet-fix/version').then(function(res) {
-				return (res || '').trim() || '1.5.2';
-			}).catch(function() { return '1.5.2'; }),
+				return (res || '').trim() || '—';
+			}).catch(function() { return '—'; }),
 			fs.read('/tmp/tg-ws-proxy-stats.json').then(function(res) {
 				try { return JSON.parse(res || '{}'); } catch(e) { return {}; }
 			}).catch(function() { return {}; }),
@@ -175,10 +38,6 @@ return view.extend({
 	},
 
 	render: function(data) {
-		var curLang = localStorage.getItem('runet_fix_lang') || 'ru';
-		if (curLang !== 'en' && curLang !== 'ru') curLang = 'ru';
-		var t = I18N[curLang];
-
 		var serviceData = data[1] || {};
 		var adblockRules = data[2] || 0;
 		var hostsCount = data[5] || 0;
@@ -193,21 +52,15 @@ return view.extend({
 
 		var telegramRunning = telegram && telegram.running;
 		var telegramPid = telegram ? telegram.pid : null;
-		var currentVersion = data[3] || '1.5.2';
+		var currentVersion = data[3] || '—';
 		var tgStats = data[4] || {};
-
-		// Attach global window handlers with closures to fs and translations
-		window.setRunetFixLang = function(lang) {
-			localStorage.setItem('runet_fix_lang', lang);
-			location.reload();
-		};
 
 		window.runetFixCheckUpdate = function() {
 			var statusEl = document.getElementById('rf-update-status');
 			var btnUpd = document.getElementById('btn-do-upd');
 			var btnCheck = document.getElementById('btn-check-upd');
 
-			if (statusEl) statusEl.innerHTML = '<span style="color:#ffc107;">' + t.checking_update + '</span>';
+			if (statusEl) statusEl.innerHTML = '<span style="color:#ffc107;">' + _('Checking GitHub...') + '</span>';
 			if (btnCheck) btnCheck.disabled = true;
 
 			fs.exec('/usr/bin/runet-fix', ['check-update', '--json']).then(function(res) {
@@ -220,25 +73,25 @@ return view.extend({
 					if (parsed.update_available) {
 						if (statusEl) {
 							statusEl.innerHTML = '<span class="badge" style="background:#28a745;color:#fff;padding:3px 8px;border-radius:4px;font-weight:bold;">' + 
-								t.update_available + ': v' + parsed.latest_version + '</span>';
+								_('Update available') + ': v' + parsed.latest_version + '</span>';
 						}
 						if (btnUpd) {
-							btnUpd.innerText = t.btn_update_now + ' v' + parsed.latest_version;
+							btnUpd.innerText = _('Update to') + ' v' + parsed.latest_version;
 							btnUpd.className = 'btn cbi-button-positive';
 							btnUpd.onclick = function() { window.runetFixPerformUpdate(parsed.latest_version); };
 						}
 					} else {
 						if (statusEl) {
-							statusEl.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.up_to_date + ' (v' + parsed.current_version + ')</span>';
+							statusEl.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('Latest version installed') + ' (v' + parsed.current_version + ')</span>';
 						}
 						if (btnUpd) {
-							btnUpd.innerText = t.btn_update;
+							btnUpd.innerText = _('Update');
 							btnUpd.className = 'btn cbi-button-save';
 							btnUpd.onclick = function() { window.runetFixPerformUpdate(); };
 						}
 					}
 				} else {
-					var err = (parsed && parsed.message) ? parsed.message : t.resp_err;
+					var err = (parsed && parsed.message) ? parsed.message : _('Response error');
 					if (statusEl) statusEl.innerHTML = '<span style="color:#dc3545;">' + err + '</span>';
 				}
 			}).catch(function(err) {
@@ -249,13 +102,13 @@ return view.extend({
 
 		window.runetFixPerformUpdate = function(ver) {
 			var msg = ver ? 
-				((curLang === 'ru' ? 'Выполнить обновление Runet-Fix до версии v' : 'Update Runet-Fix to version v') + ver + '?') : 
-				t.update_confirm;
+				(_('Update Runet-Fix to version v') + ver + '?') : 
+				_('Update Runet-Fix from GitHub to the latest version?');
 			if (!confirm(msg)) {
 				return;
 			}
-			ui.showModal(t.updating_title, [
-				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, t.updating_desc),
+			ui.showModal(_('Updating Runet-Fix'), [
+				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, _('Downloading latest release from GitHub, updating files and restarting services...')),
 				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
 			]);
 
@@ -264,27 +117,23 @@ return view.extend({
 			fs.exec('/usr/bin/runet-fix', ['update']).then(function(res) {
 				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
-				ui.addNotification(null, E('p', t.update_done), 'info');
+				ui.addNotification(null, E('p', _('Update installed successfully! Reloading page...')), 'info');
 				setTimeout(function() {
 					location.reload();
 				}, 2500);
 			}).catch(function(err) {
 				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
-				ui.addNotification(null, E('p', t.update_err + (err.message || err)), 'error');
+				ui.addNotification(null, E('p', _('Update error: ') + (err.message || err)), 'error');
 			});
 		};
 
 		window.runZapretAutotune = function() {
-			var msg = curLang === 'ru' ? 
-				'Запустить автоматический подбор пресета Zapret?\n\nБудет выполнено тестирование ключевых стратегий против серверов YouTube и Discord (~10-15 сек). Лучший пресет будет автоматически применен.' :
-				'Run Zapret Autotune?\n\nKey strategies will be benchmarked against YouTube and Discord (~10-15s). The fastest working preset will be activated automatically.';
+			var msg = _('Run Zapret Autotune?\n\nKey strategies will be benchmarked against YouTube and Discord (~10-15s). The fastest working preset will be activated automatically.');
 			if (!confirm(msg)) return;
 
-			ui.showModal(curLang === 'ru' ? 'Авто-подбор пресета Zapret' : 'Zapret Autotune', [
-				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, curLang === 'ru' ? 
-					'Идет тестирование стратегий десинхронизации (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Пожалуйста, подождите.' :
-					'Benchmarking desync strategies (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Please wait.'),
+			ui.showModal(_('Zapret Autotune'), [
+				E('p', { 'style': 'font-size:14px;margin-bottom:15px;' }, _('Benchmarking desync strategies (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Please wait.')),
 				E('div', { 'class': 'spinning', 'style': 'margin:20px auto;' })
 			]);
 
@@ -297,15 +146,15 @@ return view.extend({
 				var parsed = null;
 				try { parsed = JSON.parse(stdout); } catch(e) {}
 				if (parsed && parsed.best_preset) {
-					ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Успешно подобран и активирован пресет: ' : 'Fastest preset activated: ') + parsed.best_preset), 'info');
+					ui.addNotification(null, E('p', {}, _('Fastest preset activated: ') + parsed.best_preset), 'info');
 					setTimeout(function() { location.reload(); }, 1500);
 				} else {
-					ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Результат теста: ' : 'Autotune result: ') + stdout), 'warning');
+					ui.addNotification(null, E('p', {}, _('Autotune result: ') + stdout), 'warning');
 				}
 			}).catch(function(err) {
 				L.env.rpctimeout = savedTimeout;
 				ui.hideModal();
-				ui.addNotification(null, E('p', {}, (curLang === 'ru' ? 'Ошибка при авто-подборе: ' : 'Autotune error: ') + (err.message || err)), 'error');
+				ui.addNotification(null, E('p', {}, _('Autotune error: ') + (err.message || err)), 'error');
 			});
 		};
 
@@ -323,60 +172,60 @@ return view.extend({
 
 			if (btn) {
 				btn.disabled = true;
-				btn.innerText = t.btn_running_diag;
+				btn.innerText = _('Testing...');
 			}
 			if (resBox) resBox.style.display = 'grid';
-			if (vYt) vYt.innerHTML = '<span style="color:#ffc107;">' + t.checking + '</span>';
-			if (vDc) vDc.innerHTML = '<span style="color:#ffc107;">' + t.checking + '</span>';
-			if (vTg) vTg.innerHTML = '<span style="color:#ffc107;">' + t.checking + '</span>';
-			if (vDns) vDns.innerHTML = '<span style="color:#ffc107;">' + t.checking + '</span>';
+			if (vYt) vYt.innerHTML = '<span style="color:#ffc107;">' + _('Testing...') + '</span>';
+			if (vDc) vDc.innerHTML = '<span style="color:#ffc107;">' + _('Testing...') + '</span>';
+			if (vTg) vTg.innerHTML = '<span style="color:#ffc107;">' + _('Testing...') + '</span>';
+			if (vDns) vDns.innerHTML = '<span style="color:#ffc107;">' + _('Testing...') + '</span>';
 
 			function applyResult(parsed) {
 				if (btn) {
 					btn.disabled = false;
-					btn.innerText = t.btn_run_diag;
+					btn.innerText = _('Test Services (1 sec)');
 				}
 				if (!parsed) {
-					if (vYt) vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.resp_err + '</span>';
+					if (vYt) vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('Response error') + '</span>';
 					return;
 				}
 
 				if (parsed.youtube && parsed.youtube.ok) {
-					vYt.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.available + '</span> <small style="color:#aaa;">(' + parsed.youtube.ms + 'ms)</small>';
+					vYt.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('Available') + '</span> <small style="color:#aaa;">(' + parsed.youtube.ms + 'ms)</small>';
 					if (cYt) cYt.style.borderLeftColor = '#28a745';
 				} else {
-					vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.blocked + '</span>';
+					vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('Blocked') + '</span>';
 					if (cYt) cYt.style.borderLeftColor = '#dc3545';
 				}
 
 				if (parsed.discord && parsed.discord.ok) {
-					vDc.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.available + '</span> <small style="color:#aaa;">(' + parsed.discord.ms + 'ms)</small>';
+					vDc.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('Available') + '</span> <small style="color:#aaa;">(' + parsed.discord.ms + 'ms)</small>';
 					if (cDc) cDc.style.borderLeftColor = '#28a745';
 				} else {
-					vDc.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.unavailable + '</span>';
+					vDc.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('Unavailable') + '</span>';
 					if (cDc) cDc.style.borderLeftColor = '#dc3545';
 				}
 
 				if (parsed.telegram && parsed.telegram.ok) {
-					var extra = t.tg_tunnel_active;
+					var extra = _('(Tunnel :1443 active)');
 					if (parsed.telegram.stats && parsed.telegram.stats.active_sessions !== undefined) {
-						extra = (curLang === 'ru' ? 'сессий: ' : 'sessions: ') + parsed.telegram.stats.active_sessions;
+						extra = _('sessions: ') + parsed.telegram.stats.active_sessions;
 					}
-					vTg.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.connected + '</span> <small style="color:#aaa;">(' + extra + ')</small>';
+					vTg.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('Connected') + '</span> <small style="color:#aaa;">(' + extra + ')</small>';
 					if (cTg) cTg.style.borderLeftColor = '#28a745';
 				} else {
-					vTg.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.stopped + '</span>';
+					vTg.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('STOPPED') + '</span>';
 					if (cTg) cTg.style.borderLeftColor = '#dc3545';
 				}
 
 				if (parsed.dns && parsed.dns.ok && parsed.dns.adblock_ok) {
-					vDns.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.active + '</span> <small style="color:#aaa;">' + t.blocking_active + '</small>';
+					vDns.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('ACTIVE') + '</span> <small style="color:#aaa;">' + _('(Blocking active)') + '</small>';
 					if (cDns) cDns.style.borderLeftColor = '#28a745';
 				} else if (parsed.dns && parsed.dns.ok) {
-					vDns.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + t.dns_ok + '</span>';
+					vDns.innerHTML = '<span style="color:#28a745;font-weight:bold;">' + _('DNS OK') + '</span>';
 					if (cDns) cDns.style.borderLeftColor = '#28a745';
 				} else {
-					vDns.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.dns_err + '</span>';
+					vDns.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('DNS Error') + '</span>';
 					if (cDns) cDns.style.borderLeftColor = '#dc3545';
 				}
 			}
@@ -405,9 +254,9 @@ return view.extend({
 				}).catch(function() {
 					if (btn) {
 						btn.disabled = false;
-						btn.innerText = t.btn_run_diag;
+						btn.innerText = _('Test Services (1 sec)');
 					}
-					if (vYt) vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + t.rpc_err + (err.message || err) + '</span>';
+					if (vYt) vYt.innerHTML = '<span style="color:#dc3545;font-weight:bold;">' + _('RPC Error: ') + (err.message || err) + '</span>';
 				});
 			});
 		};
@@ -417,34 +266,38 @@ return view.extend({
 			var oldText = btn ? btn.innerText : '';
 			if (btn) {
 				btn.disabled = true;
-				btn.innerText = t.working;
+				btn.innerText = _('Working...');
 			}
 			fs.exec('/usr/bin/runet-fix', [act]).then(function() {
-				if (btn) btn.innerText = t.success;
+				if (btn) btn.innerText = _('Success!');
 				setTimeout(function() { location.reload(); }, 1200);
 			}).catch(function() {
 				if (btn) {
-					btn.innerText = t.error;
+					btn.innerText = _('Error');
 					setTimeout(function() { btn.disabled = false; btn.innerText = oldText; }, 2000);
 				}
 			});
 		};
 
 		window.runetFixUninstall = function() {
-			if (!confirm(t.uninstall_confirm)) {
+			var resp = prompt(_('Warning! Are you sure you want to completely uninstall Runet-Fix from this router?\n\nAll services will be stopped, nftables rules removed, cron jobs cleaned, and all scripts, lists, and LuCI web views deleted.\nConfig backup will be saved in /etc/config/.\n\nType UNINSTALL to confirm:'));
+			if (resp !== 'UNINSTALL') {
+				if (resp !== null) {
+					ui.addNotification(null, E('p', _('Uninstall cancelled: confirmation mismatch')), 'warning');
+				}
 				return;
 			}
 			var btn = document.getElementById('btn-uninstall');
 			if (btn) {
 				btn.disabled = true;
-				btn.innerText = t.uninstalling;
+				btn.innerText = _('Uninstalling Runet-Fix from router...');
 			}
-			ui.showModal(t.danger_section, [
-				E('p', { 'class': 'spinning' }, t.uninstalling)
+			ui.showModal(_('Uninstall Runet-Fix'), [
+				E('p', { 'class': 'spinning' }, _('Uninstalling Runet-Fix from router...'))
 			]);
 			fs.exec('/usr/bin/runet-fix', ['uninstall']).then(function() {
 				ui.hideModal();
-				ui.addNotification(null, E('p', t.uninstall_done), 'info');
+				ui.addNotification(null, E('p', _('Runet-Fix has been removed. Redirecting...')), 'info');
 				setTimeout(function() {
 					window.location.href = L.url('admin/status/overview');
 				}, 2000);
@@ -453,22 +306,24 @@ return view.extend({
 				ui.addNotification(null, E('p', 'Uninstall error: ' + (err.message || err)), 'error');
 				if (btn) {
 					btn.disabled = false;
-					btn.innerText = t.btn_uninstall;
+					btn.innerText = _('Completely Uninstall Runet-Fix');
 				}
 			});
 		};
 
-		var m = new form.Map('runet-fix', t.title, t.desc);
+		var m = new form.Map('runet-fix',
+			_('Runet Fix - All-in-One Dashboard'),
+			_('Unified high-performance suite for OpenWrt: Zapret DPI bypass, Transparent Telegram WebSocket tunnel, and Smart Adblock.'));
 
 		// 1. Master Switch & System Overview
-		var s = m.section(form.NamedSection, 'main', 'global', t.master_section);
+		var s = m.section(form.NamedSection, 'main', 'global', _('Master Switch & System Overview'));
 
-		var o_en = s.option(form.Flag, 'enabled', t.enable_all, t.enable_all_desc);
+		var o_en = s.option(form.Flag, 'enabled', _('Enable All Services'), _('Globally enables or disables all Runet-Fix subsystems.'));
 		o_en.rmempty = false;
 		o_en.default = o_en.enabled;
 
 		// Version & Update Management Row
-		var v_ctrl = s.option(form.DummyValue, '_version_control', t.version_row_name);
+		var v_ctrl = s.option(form.DummyValue, '_version_control', _('Runet-Fix Version'));
 		v_ctrl.rawhtml = true;
 		v_ctrl.cfgvalue = function() {
 			return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:4px 0;">' +
@@ -479,47 +334,47 @@ return view.extend({
 				'  </a>' +
 				'  <span id="rf-update-status" style="font-size:13px;color:#888;"></span>' +
 				'  <div style="display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap;">' +
-				'    <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + t.btn_check_update + '</button>' +
-				'    <button type="button" class="btn cbi-button-save" id="btn-do-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixPerformUpdate()">' + t.btn_update + '</button>' +
+				'    <button type="button" class="btn cbi-button-action" id="btn-check-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixCheckUpdate()">' + _('Check for Updates') + '</button>' +
+				'    <button type="button" class="btn cbi-button-save" id="btn-do-upd" style="padding:4px 14px;font-size:12px;font-weight:bold;" onclick="window.runetFixPerformUpdate()">' + _('Update') + '</button>' +
 				'  </div>' +
 				'</div>';
 		};
 
 		// Status Overview Table
-		var o = s.option(form.DummyValue, '_status_table', t.status_table);
+		var o = s.option(form.DummyValue, '_status_table', _('Subsystem Status'));
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			var zapretMode = uci.get('runet-fix', 'zapret', 'mode') || 'all';
 			var zapretExtra = (zapretRunning && zapretMode === 'list') ?
 				'<span style="font-size:12px;color:#28a745;margin-left:6px;font-weight:normal;">(' +
-				(curLang === 'ru' ? 'по списку: ' : 'hostlist: ') + (hostsCount > 0 ? hostsCount.toLocaleString() + ' ' + t.domains : 'активен') + ')</span>' : '';
+				_('hostlist: ') + (hostsCount > 0 ? hostsCount.toLocaleString() + ' ' + _('domains') : _('ACTIVE')) + ')</span>' : '';
 
 			var zapretBadge = zapretRunning ? 
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.running + ' (PID ' + zapretPid + ')</span>' + zapretExtra :
-				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.stopped + '</span>';
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('RUNNING') + ' (PID ' + zapretPid + ')</span>' + zapretExtra :
+				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('STOPPED') + '</span>';
 
 			var tgExtra = (telegramRunning && tgStats.total_sessions !== undefined) ?
 				'<span style="font-size:12px;color:#28a745;margin-left:6px;font-weight:normal;">(' +
-				(curLang === 'ru' ? 'сессий: ' : 'sessions: ') + (tgStats.active_sessions || 0) + ' ' +
-				(curLang === 'ru' ? 'акт., всего: ' : 'act., total: ') + (tgStats.total_sessions || 0) + ')</span>' : '';
+				_('sessions: ') + (tgStats.active_sessions || 0) + ' ' +
+				_('act., total: ') + (tgStats.total_sessions || 0) + ')</span>' : '';
 
 			var tgBadge = telegramRunning ?
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (PID ' + telegramPid + ')</span>' + tgExtra :
-				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.stopped + '</span>';
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('ACTIVE') + ' (PID ' + telegramPid + ')</span>' + tgExtra :
+				'<span class="badge" style="background:#dc3545;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('STOPPED') + '</span>';
 
 			var adblockBadge = adblockRules > 0 ?
-				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.active + ' (' + adblockRules.toLocaleString() + ' ' + t.domains + ')</span>' :
-				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + t.inactive + '</span>';
+				'<span class="badge" style="background:#28a745;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('ACTIVE') + ' (' + adblockRules.toLocaleString() + ' ' + _('domains') + ')</span>' :
+				'<span class="badge" style="background:#6c757d;color:#fff;padding:4px 8px;border-radius:4px;font-weight:bold;">' + _('INACTIVE') + '</span>';
 
 			return '<div class="table" style="margin-top:10px;">' +
-				'<div class="tr"><div class="td" style="font-weight:bold;width:35%;">' + t.zapret_name + '</div><div class="td">' + zapretBadge + '</div></div>' +
-				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.tg_name + '</div><div class="td">' + tgBadge + ' <small style="margin-left:10px;color:#888;">' + t.tg_sub + '</small></div></div>' +
-				'<div class="tr"><div class="td" style="font-weight:bold;">' + t.adblock_name + '</div><div class="td">' + adblockBadge + ' <small style="margin-left:10px;color:#888;">' + t.adblock_sub + '</small></div></div>' +
+				'<div class="tr"><div class="td" style="font-weight:bold;width:35%;">' + _('Zapret (YouTube 4K & Discord DPI)') + '</div><div class="td">' + zapretBadge + '</div></div>' +
+				'<div class="tr"><div class="td" style="font-weight:bold;">' + _('Telegram Transparent Proxy') + '</div><div class="td">' + tgBadge + ' <small style="margin-left:10px;color:#888;">' + _('(Zero-config for whole LAN)') + '</small></div></div>' +
+				'<div class="tr"><div class="td" style="font-weight:bold;">' + _('dnsmasq Smart Adblock') + '</div><div class="td">' + adblockBadge + ' <small style="margin-left:10px;color:#888;">' + _('(0 extra daemons, RAM optimized)') + '</small></div></div>' +
 				'</div>';
 		};
 
 		// 2. Live RuNet Health Probe Diagnostics
-		var s_diag = m.section(form.NamedSection, 'main', 'global', t.diag_section);
+		var s_diag = m.section(form.NamedSection, 'main', 'global', _('Service Availability Diagnostics (RuNet Health Probe)'));
 		var probe_ui = s_diag.option(form.DummyValue, '_health_probe');
 		probe_ui.rawhtml = true;
 		probe_ui.cfgvalue = function() {
@@ -531,62 +386,52 @@ return view.extend({
 				'</style>' +
 				'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">' +
 				'  <div>' +
-				'    <strong style="font-size:14px;color:#fff;">' + t.diag_title + '</strong><br>' +
-				'    <small style="color:#aaa;">' + t.diag_desc + '</small>' +
+				'    <strong style="font-size:14px;color:#fff;">' + _('Real-Time Network Health Probe') + '</strong><br>' +
+				'    <small style="color:#aaa;">' + _('Instant verification (1–2 sec): YouTube 4K, Discord Gateway, Telegram tunnel, and adblock status.') + '</small>' +
 				'  </div>' +
-				'  <button type="button" class="btn cbi-button-action" id="btn-run-probe" style="padding:6px 16px;font-weight:bold;" onclick="window.runRuNetHealthProbe()">' + t.btn_run_diag + '</button>' +
+				'  <button type="button" class="btn cbi-button-action" id="btn-run-probe" style="padding:6px 16px;font-weight:bold;" onclick="window.runRuNetHealthProbe()">' + _('Test Services (1 sec)') + '</button>' +
 				'</div>' +
 				'<div id="probe-results" class="rf-probe-grid" style="display:none;">' +
 				'  <div id="card-yt" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_yt + '</div>' +
-				'    <div id="val-yt" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _('YouTube 4K (DPI)') + '</div>' +
+				'    <div id="val-yt" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + _('Not checked') + '</div>' +
 				'  </div>' +
 				'  <div id="card-dc" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_dc + '</div>' +
-				'    <div id="val-dc" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _('Discord Gateway') + '</div>' +
+				'    <div id="val-dc" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + _('Not checked') + '</div>' +
 				'  </div>' +
 				'  <div id="card-tg" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_tg + '</div>' +
-				'    <div id="val-tg" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _('Telegram WebSocket') + '</div>' +
+				'    <div id="val-tg" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + _('Not checked') + '</div>' +
 				'  </div>' +
 				'  <div id="card-dns" style="background:#282c34;padding:8px 10px;border-radius:6px;border-left:4px solid #6c757d;min-width:0;">' +
-				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + t.card_dns + '</div>' +
-				'    <div id="val-dns" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + t.not_checked + '</div>' +
+				'    <div style="font-size:11px;color:#aaa;text-transform:uppercase;font-weight:bold;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + _('DNS & Adblock') + '</div>' +
+				'    <div id="val-dns" style="font-size:13px;font-weight:bold;margin-top:4px;color:#fff;">' + _('Not checked') + '</div>' +
 				'  </div>' +
 				'</div>' +
 				'</div>';
 		};
 
 		// 3. Quick Action Buttons
-		var actions = s.option(form.DummyValue, '_actions', t.actions_section);
+		var actions = s.option(form.DummyValue, '_actions', _('Quick Actions'));
 		actions.rawhtml = true;
 		actions.cfgvalue = function() {
-			var ruBtnStyle = curLang === 'ru' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-			var enBtnStyle = curLang === 'en' ? 'background:#007bff;color:#fff;font-weight:bold;' : 'background:#2c2c2c;color:#bbb;';
-
 			return '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
-				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + t.btn_restart + '</button> ' +
-				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + (curLang === 'ru' ? 'Авто-подбор Zapret' : 'Zapret Autotune') + '</button> ' +
-				'<button type="button" class="btn cbi-button-save" id="btn-hosts" onclick="window.runetFixAction(\'update-hosts\')">' + t.btn_update_hosts + '</button> ' +
-				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update-adblock\')">' + t.btn_update_adblock + '</button> ' +
-				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + t.btn_refresh + '</button>' +
-				'<div style="display:inline-flex;align-items:center;gap:8px;margin-left:auto;padding-left:10px;">' +
-				'<span style="font-size:13px;color:#888;font-weight:bold;">' + t.lang_label + '</span>' +
-				'<div class="btn-group" style="display:inline-flex;border-radius:4px;overflow:hidden;border:1px solid #444;">' +
-				'<button type="button" class="btn" style="padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + ruBtnStyle + '" onclick="window.setRunetFixLang(\'ru\')">RU</button>' +
-				'<button type="button" class="btn" style="padding:4px 14px;font-size:12px;border:none;cursor:pointer;' + enBtnStyle + '" onclick="window.setRunetFixLang(\'en\')">ENG</button>' +
-				'</div>' +
-				'</div>' +
+				'<button type="button" class="btn cbi-button-action" id="btn-restart" onclick="window.runetFixAction(\'restart\')">' + _('Restart Services') + '</button> ' +
+				'<button type="button" class="btn cbi-button-action" style="background:#6f42c1;color:#fff;font-weight:bold;" onclick="window.runZapretAutotune()">' + _('Zapret Autotune') + '</button> ' +
+				'<button type="button" class="btn cbi-button-save" id="btn-hosts" onclick="window.runetFixAction(\'update-hosts\')">' + _('Update Zapret Hosts') + '</button> ' +
+				'<button type="button" class="btn cbi-button-save" id="btn-adblock" onclick="window.runetFixAction(\'update-adblock\')">' + _('Update Adblock Now') + '</button> ' +
+				'<button type="button" class="btn cbi-button-neutral" id="btn-refresh" onclick="location.reload()">' + _('Refresh Status') + '</button>' +
 				'</div>';
 		};
 
 		// 4. Danger Zone (Uninstallation)
-		var s_danger = m.section(form.NamedSection, 'main', 'global', t.danger_section, t.danger_desc);
+		var s_danger = m.section(form.NamedSection, 'main', 'global', _('Uninstall Runet-Fix'), _('Completely remove the Runet-Fix suite, stop all daemons, delete nftables firewall rules, clean cron schedule and LuCI web views.'));
 		var uninstall_ui = s_danger.option(form.DummyValue, '_uninstall');
 		uninstall_ui.rawhtml = true;
 		uninstall_ui.cfgvalue = function() {
 			return '<div style="margin-top:8px;">' +
-				'<button type="button" class="btn cbi-button-negative" id="btn-uninstall" style="padding:7px 18px;font-weight:bold;" onclick="window.runetFixUninstall()">' + t.btn_uninstall + '</button>' +
+				'<button type="button" class="btn cbi-button-negative" id="btn-uninstall" style="padding:7px 18px;font-weight:bold;" onclick="window.runetFixUninstall()">' + _('Completely Uninstall Runet-Fix') + '</button>' +
 				'</div>';
 		};
 

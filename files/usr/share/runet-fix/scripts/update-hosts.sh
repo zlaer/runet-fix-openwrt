@@ -2,9 +2,26 @@
 # update-hosts.sh - Curated AntiFilter Community blocked domains updater for Zapret
 # Part of the runet-fix all-in-one suite.
 
+LOCK_DIR="/var/lock/runet-fix-hosts"
+if [ -d "$LOCK_DIR" ]; then
+    PID=$(cat "$LOCK_DIR/pid" 2>/dev/null)
+    if [ -n "$PID" ] && [ -d "/proc/$PID" ]; then
+        echo "[runet-fix:hosts] Another hostlist update is running (PID $PID). Aborting." >&2
+        exit 1
+    fi
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+fi
+mkdir -p "$LOCK_DIR"
+echo "$$" > "$LOCK_DIR/pid"
+
+TEMP_DIR=""
+cleanup() {
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    [ -n "$TEMP_DIR" ] && rm -rf "$TEMP_DIR" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
 HOSTLIST_FILE="/usr/share/runet-fix/lists/zapret-hosts.txt"
-TEMP_RAW="/tmp/zapret_hosts_raw.tmp"
-TEMP_MERGED="/tmp/zapret_hosts_merged.tmp"
 COUNT_FILE="/tmp/runet-fix-hosts.count"
 
 # AntiFilter Community list URL
@@ -12,6 +29,12 @@ ANTIFILTER_URL="https://community.antifilter.download/list/domains.lst"
 
 mkdir -p /usr/share/runet-fix/lists
 mkdir -p /tmp/runet-fix
+
+TEMP_DIR=$(mktemp -d /tmp/hosts.XXXXXX 2>/dev/null || echo "/tmp/hosts_$$")
+mkdir -p "$TEMP_DIR"
+TEMP_RAW="$TEMP_DIR/raw.tmp"
+TEMP_MERGED="$TEMP_DIR/merged.tmp"
+TEMP_TARGET="$TEMP_DIR/target.tmp"
 
 fetch_file() {
     local url="$1"
@@ -95,13 +118,21 @@ EOF_BASE
 
 # 4. Clean, trim and deduplicate
 tr -d '\r' < "$TEMP_MERGED" | sed 's/^[ \t]*//;s/[ \t]*$//' | \
-    grep -v '^#' | grep -v '^$' | grep '\.' | sort -u > "$HOSTLIST_FILE"
+    grep -v '^#' | grep -v '^$' | grep '\.' | sort -u > "$TEMP_TARGET"
 
-rm -f "$TEMP_RAW" "$TEMP_MERGED"
+TOTAL_COUNT=$(wc -l < "$TEMP_TARGET" | tr -d ' ')
 
-TOTAL_COUNT=$(wc -l < "$HOSTLIST_FILE" | tr -d ' ')
+# Safeguard: Never write an empty hostlist; base list alone has ~30 domains
+if [ "$TOTAL_COUNT" -lt 20 ]; then
+    echo "[runet-fix:hosts] Error: Filtered domain count ($TOTAL_COUNT) below safe threshold (20). Keeping existing hostlist." >&2
+    logger -t runet-fix "Hostlist update failed: count ($TOTAL_COUNT) below threshold (20)" 2>/dev/null || true
+    exit 1
+fi
+
+# Atomic replacement via mv
+mv "$TEMP_TARGET" "$HOSTLIST_FILE"
 echo "$TOTAL_COUNT" > "$COUNT_FILE"
-chmod 644 "$HOSTLIST_FILE" 2>/dev/null || true
+chmod 644 "$HOSTLIST_FILE" "$COUNT_FILE" 2>/dev/null || true
 echo "[runet-fix:hosts] Zapret hostlist successfully updated: $TOTAL_COUNT active domains."
 
 # 5. Sync crontab schedule

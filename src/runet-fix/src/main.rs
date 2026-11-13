@@ -4,6 +4,7 @@ mod ipc;
 mod os;
 mod proxy;
 mod test_cmd;
+pub mod util;
 mod zapret;
 
 use std::process::Command;

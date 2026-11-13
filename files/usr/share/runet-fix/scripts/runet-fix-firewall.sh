@@ -3,8 +3,101 @@
 # Part of the runet-fix all-in-one suite for OpenWrt.
 
 TABLE_NAME="runet_fix"
-QNUM=200
 TG_PORT="${TG_PORT:-1443}"
+
+# Read and validate QNUM (1-65535, fallback 200)
+get_qnum() {
+    local q=$(uci -q get runet-fix.zapret.qnum)
+    case "$q" in
+        ''|*[!0-9]*)
+            [ -n "$q" ] && logger -t runet-fix "Invalid QNUM '$q', falling back to 200" 2>/dev/null
+            echo "200"
+            return
+            ;;
+    esac
+    if [ "$q" -ge 1 ] && [ "$q" -le 65535 ]; then
+        echo "$q"
+    else
+        logger -t runet-fix "QNUM '$q' out of range (1-65535), falling back to 200" 2>/dev/null
+        echo "200"
+    fi
+}
+QNUM=$(get_qnum)
+
+# Helper to execute iptables and log errors
+ipt_apply() {
+    if ! iptables "$@"; then
+        logger -t runet-fix "Failed to apply iptables rule: $*" 2>/dev/null || echo "[runet-fix] Error applying iptables $*" >&2
+        return 1
+    fi
+    return 0
+}
+
+validate_ip_or_cidr() {
+    local val="$1"
+    [ -z "$val" ] && return 1
+    case "$val" in
+        *[!0-9./]*|*..*|*//*|"") return 1 ;;
+    esac
+    local ip_part="${val%/*}"
+    local cidr_part=""
+    if [ "$ip_part" != "$val" ]; then
+        cidr_part="${val#*/}"
+        case "$cidr_part" in
+            ""|*[!0-9]*) return 1 ;;
+        esac
+        [ "$cidr_part" -ge 0 ] 2>/dev/null && [ "$cidr_part" -le 32 ] 2>/dev/null || return 1
+    fi
+    local o1 o2 o3 o4
+    o1=$(echo "$ip_part" | cut -d. -f1)
+    o2=$(echo "$ip_part" | cut -d. -f2)
+    o3=$(echo "$ip_part" | cut -d. -f3)
+    o4=$(echo "$ip_part" | cut -d. -f4)
+    [ -n "$o1" ] && [ -n "$o2" ] && [ -n "$o3" ] && [ -n "$o4" ] || return 1
+    [ "$o1" -ge 0 ] 2>/dev/null && [ "$o1" -le 255 ] 2>/dev/null || return 1
+    [ "$o2" -ge 0 ] 2>/dev/null && [ "$o2" -le 255 ] 2>/dev/null || return 1
+    [ "$o3" -ge 0 ] 2>/dev/null && [ "$o3" -le 255 ] 2>/dev/null || return 1
+    [ "$o4" -ge 0 ] 2>/dev/null && [ "$o4" -le 255 ] 2>/dev/null || return 1
+    return 0
+}
+
+validate_mac() {
+    local val="$1"
+    [ -z "$val" ] && return 1
+    echo "$val" | grep -Eiq '^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$' || return 1
+    return 0
+}
+
+filter_exclusions() {
+    local raw_ips="$1"
+    local raw_macs="$2"
+    valid_excl_ips=""
+    valid_excl_macs=""
+
+    for item in $raw_ips; do
+        item=$(echo "$item" | tr -d '", \t\r\n')
+        [ -z "$item" ] && continue
+        if validate_ip_or_cidr "$item"; then
+            valid_excl_ips="$valid_excl_ips $item"
+        else
+            logger -t runet-fix "Dropping invalid excluded IP/CIDR: '$item'" 2>/dev/null
+            echo "[runet-fix] Warning: Dropping invalid excluded IP/CIDR: '$item'" >&2
+        fi
+    done
+    valid_excl_ips="${valid_excl_ips# }"
+
+    for item in $raw_macs; do
+        item=$(echo "$item" | tr -d '", \t\r\n')
+        [ -z "$item" ] && continue
+        if validate_mac "$item"; then
+            valid_excl_macs="$valid_excl_macs $(echo "$item" | tr 'A-Z' 'a-z')"
+        else
+            logger -t runet-fix "Dropping invalid excluded MAC: '$item'" 2>/dev/null
+            echo "[runet-fix] Warning: Dropping invalid excluded MAC: '$item'" >&2
+        fi
+    done
+    valid_excl_macs="${valid_excl_macs# }"
+}
 
 # Determine firewall implementation
 is_fw4() {
@@ -44,7 +137,7 @@ start_nft() {
 
     local zapret_enabled=$(uci -q get runet-fix.zapret.enabled)
     [ -z "$zapret_enabled" ] && zapret_enabled="1"
-    local zapret_mode=$(uci -q get runet-fix.zapret.mode || echo "all")
+    local QNUM=$(get_qnum)
     local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
     [ -z "$tg_enabled" ] && tg_enabled="1" 
     local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
@@ -88,27 +181,34 @@ table inet runet_fix {
 EOF_HDR
 
     # Excluded Devices Sets (Device Bypass by IP / MAC)
+    filter_exclusions "$excl_ips" "$excl_macs"
+
     local has_excl_ips=0
-    if [ -n "$excl_ips" ]; then
-        echo "    set excluded_ips { type ipv4_addr; flags interval; elements = { $(echo $excl_ips | sed 's/ /, /g') } }" >> "$NFT_CONF"
+    if [ -n "$valid_excl_ips" ]; then
+        echo "    set excluded_ips { type ipv4_addr; flags interval; elements = { $(echo $valid_excl_ips | sed 's/ /, /g') } }" >> "$NFT_CONF"
         has_excl_ips=1
-        echo "[runet-fix] Device bypass active for IPs: $excl_ips"
+        echo "[runet-fix] Device bypass active for IPs: $valid_excl_ips"
     fi
 
     local has_excl_macs=0
-    if [ -n "$excl_macs" ]; then
-        echo "    set excluded_macs { type ether_addr; elements = { $(echo $excl_macs | sed 's/ /, /g') } }" >> "$NFT_CONF"
+    if [ -n "$valid_excl_macs" ]; then
+        echo "    set excluded_macs { type ether_addr; elements = { $(echo $valid_excl_macs | sed 's/ /, /g') } }" >> "$NFT_CONF"
         has_excl_macs=1
-        echo "[runet-fix] Device bypass active for MACs: $excl_macs"
+        echo "[runet-fix] Device bypass active for MACs: $valid_excl_macs"
     fi
 
-    # Telegram Transparent Redirection (NAT PREROUTING for LAN clients) & IPv6 Leak Prevention
+    # Telegram Transparent Redirection (NAT PREROUTING & NAT OUTPUT) & IPv6 Leak Prevention
     if [ "$tg_enabled" = "1" ]; then
         cat << EOF_TG >> "$NFT_CONF"
     chain tg_nat_pre {
         type nat hook prerouting priority dstnat; policy accept;
 $([ "$has_excl_ips" = "1" ] && echo "        ip saddr @excluded_ips return")
 $([ "$has_excl_macs" = "1" ] && echo "        ether saddr @excluded_macs return")
+        ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port
+    }
+    chain tg_nat_out {
+        type nat hook output priority dstnat; policy accept;
+        mark 0x40000000 return
         ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port
     }
     chain tg_reject_v6 {
@@ -205,6 +305,9 @@ start_ipt() {
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
     local excl_ips=$(uci -q get runet-fix.zapret.excluded_ips)
+    local excl_macs=$(uci -q get runet-fix.zapret.excluded_macs)
+    filter_exclusions "$excl_ips" "$excl_macs"
+    local QNUM=$(get_qnum)
 
     if [ "$zapret_enabled" != "1" ] && [ "$tg_enabled" != "1" ]; then
         echo "[runet-fix] Both Zapret and Telegram disabled. Firewall rules cleaned."
@@ -214,19 +317,32 @@ start_ipt() {
     echo "[runet-fix] Applying iptables rules (fw3)..."
 
     # Create ipset for telegram
-    ipset create tg_subnets hash:net -exist
+    ipset create tg_subnets hash:net -exist 2>/dev/null || true
     for net in $TELEGRAM_SUBNETS; do
-        ipset add tg_subnets $net -exist
+        ipset add tg_subnets $net -exist 2>/dev/null || true
     done
 
-    # Telegram Redirect
+    # Telegram Redirect (PREROUTING for LAN and OUTPUT for local router traffic)
     if [ "$tg_enabled" = "1" ]; then
         iptables -t nat -N RUNET_TG 2>/dev/null || iptables -t nat -F RUNET_TG
-        for ip in $excl_ips; do
-            iptables -t nat -A RUNET_TG -s "$ip" -j RETURN
+        iptables -t nat -N RUNET_TG_OUT 2>/dev/null || iptables -t nat -F RUNET_TG_OUT
+
+        while iptables -t nat -D PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG 2>/dev/null; do :; done
+        while iptables -t nat -D OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG_OUT 2>/dev/null; do :; done
+
+        for mac in $valid_excl_macs; do
+            ipt_apply -t nat -A RUNET_TG -m mac --mac-source "$mac" -j RETURN
         done
-        iptables -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
-        iptables -t nat -I PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG
+        for ip in $valid_excl_ips; do
+            ipt_apply -t nat -A RUNET_TG -s "$ip" -j RETURN
+        done
+        ipt_apply -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
+        ipt_apply -t nat -I PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG
+
+        # Router local Telegram traffic proxying (RUNET_TG_OUT)
+        ipt_apply -t nat -A RUNET_TG_OUT -m mark --mark 0x40000000 -j RETURN
+        ipt_apply -t nat -A RUNET_TG_OUT -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
+        ipt_apply -t nat -I OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG_OUT
 
         # Telegram IPv6 leak prevention (fw3): force clients to fallback to IPv4 transparent proxy
         if command -v ip6tables >/dev/null 2>&1; then
@@ -240,51 +356,79 @@ start_ipt() {
     # Zapret NFQUEUE
     if [ "$zapret_enabled" = "1" ]; then
         iptables -t mangle -N RUNET_ZAPRET 2>/dev/null || iptables -t mangle -F RUNET_ZAPRET
-        for ip in $excl_ips; do
-            iptables -t mangle -A RUNET_ZAPRET -s "$ip" -j RETURN
+        iptables -t mangle -N RUNET_ZAPRET_OUT 2>/dev/null || iptables -t mangle -F RUNET_ZAPRET_OUT
+
+        # FORWARD chain rules (RUNET_ZAPRET)
+        for mac in $valid_excl_macs; do
+            ipt_apply -t mangle -A RUNET_ZAPRET -m mac --mac-source "$mac" -j RETURN
+        done
+        for ip in $valid_excl_ips; do
+            ipt_apply -t mangle -A RUNET_ZAPRET -s "$ip" -j RETURN
         done
         if [ "$tg_enabled" = "1" ]; then
-            iptables -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
+            ipt_apply -t mangle -A RUNET_ZAPRET -m set --match-set tg_subnets dst -j RETURN
         fi
-        iptables -t mangle -A RUNET_ZAPRET -m mark --mark 0x40000000 -j RETURN
-        iptables -t mangle -A RUNET_ZAPRET -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.0/8 -j RETURN
+        for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8; do
+            ipt_apply -t mangle -A RUNET_ZAPRET -d "$cidr" -j RETURN
+        done
         local tcp_ports="80,443"
         if [ "$discord_fix" = "1" ]; then
             tcp_ports="80,443,2053,2083,2087,2096,8443"
         fi
-        iptables -t mangle -A RUNET_ZAPRET -p tcp -m multiport --dports $tcp_ports -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+        ipt_apply -t mangle -A RUNET_ZAPRET -p tcp -m multiport --dports $tcp_ports -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         if [ "$discord_fix" = "1" ]; then
-            iptables -t mangle -A RUNET_ZAPRET -p udp --dport 50000:50100 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
-            iptables -t mangle -A RUNET_ZAPRET -p udp --dport 19294:19344 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+            ipt_apply -t mangle -A RUNET_ZAPRET -p udp --dport 50000:50100 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+            ipt_apply -t mangle -A RUNET_ZAPRET -p udp --dport 19294:19344 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         fi
         if [ "$game_fix" = "1" ]; then
-            iptables -t mangle -A RUNET_ZAPRET -p udp --dport 27015:27050 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
-            iptables -t mangle -A RUNET_ZAPRET -p udp --dport 7777:7780 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+            ipt_apply -t mangle -A RUNET_ZAPRET -p udp --dport 27015:27050 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+            ipt_apply -t mangle -A RUNET_ZAPRET -p udp --dport 7777:7780 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
         fi
-        iptables -t mangle -A RUNET_ZAPRET -p udp --dport 443 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
-        iptables -t mangle -I FORWARD -j RUNET_ZAPRET
-        iptables -t mangle -I OUTPUT -j RUNET_ZAPRET
+        ipt_apply -t mangle -A RUNET_ZAPRET -p udp --dport 443 -m connbytes --connbytes 1:10 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+        ipt_apply -t mangle -I FORWARD -j RUNET_ZAPRET
+
+        # OUTPUT chain rules (RUNET_ZAPRET_OUT, mirrors zapret_mangle_out in nft)
+        ipt_apply -t mangle -A RUNET_ZAPRET_OUT -m mark --mark 0x40000000 -j RETURN
+        for cidr in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 127.0.0.0/8; do
+            ipt_apply -t mangle -A RUNET_ZAPRET_OUT -d "$cidr" -j RETURN
+        done
+        if [ "$tg_enabled" = "1" ]; then
+            ipt_apply -t mangle -A RUNET_ZAPRET_OUT -m set --match-set tg_subnets dst -j RETURN
+        fi
+        ipt_apply -t mangle -A RUNET_ZAPRET_OUT -p tcp -m multiport --dports 80,443 -m connbytes --connbytes 1:20 --connbytes-dir original --connbytes-mode packets -j NFQUEUE --queue-num $QNUM --queue-bypass
+        ipt_apply -t mangle -I OUTPUT -j RUNET_ZAPRET_OUT
     fi
 
     # DNS Redirection (port 53)
     local adb_enabled=$(uci -q get runet-fix.adblock.enabled || echo "1")
     if [ "$adb_enabled" = "1" ]; then
-        iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
-        iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null || true
+        while iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null; do :; done
+        while iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null; do :; done
+        ipt_apply -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53
+        ipt_apply -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53
     fi
 }
 
 stop_ipt() {
     echo "[runet-fix] Flushing iptables rules..."
-    iptables -t nat -D PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG 2>/dev/null || true
-    iptables -t nat -D OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG 2>/dev/null || true
+    while iptables -t nat -D PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG 2>/dev/null; do :; done
+    while iptables -t nat -D OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG_OUT 2>/dev/null; do :; done
     iptables -t nat -F RUNET_TG 2>/dev/null || true
     iptables -t nat -X RUNET_TG 2>/dev/null || true
+    iptables -t nat -F RUNET_TG_OUT 2>/dev/null || true
+    iptables -t nat -X RUNET_TG_OUT 2>/dev/null || true
 
     iptables -t mangle -D FORWARD -j RUNET_ZAPRET 2>/dev/null || true
     iptables -t mangle -D OUTPUT -j RUNET_ZAPRET 2>/dev/null || true
     iptables -t mangle -F RUNET_ZAPRET 2>/dev/null || true
     iptables -t mangle -X RUNET_ZAPRET 2>/dev/null || true
+
+    iptables -t mangle -D OUTPUT -j RUNET_ZAPRET_OUT 2>/dev/null || true
+    iptables -t mangle -F RUNET_ZAPRET_OUT 2>/dev/null || true
+    iptables -t mangle -X RUNET_ZAPRET_OUT 2>/dev/null || true
+
+    while iptables -t nat -D PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null; do :; done
+    while iptables -t nat -D PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53 2>/dev/null; do :; done
 
     ipset destroy tg_subnets 2>/dev/null || true
 
@@ -316,6 +460,12 @@ case "$1" in
         $0 start
         ;;
     status)
+        qnum=$(get_qnum)
+        q_status="inactive"
+        if grep -qw "$qnum" /proc/net/netfilter/nfnetlink_queue 2>/dev/null; then
+            q_status="active"
+        fi
+        echo "Zapret QNUM: $qnum (queue $q_status)"
         if is_fw4; then
             nft list table inet $TABLE_NAME 2>/dev/null || echo "Firewall table $TABLE_NAME is inactive"
         else

@@ -31,7 +31,34 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
 
     let probe_fut = async {
         let addr = format!("{}:{}", host, port);
-        let stream = TcpStream::connect(&addr).await?;
+        let addrs = tokio::net::lookup_host(&addr).await?;
+        let mut sorted_addrs: Vec<_> = addrs.collect();
+        // Prioritize IPv4 addresses so unroutable IPv6 WAN routes don't delay or fail probes
+        sorted_addrs.sort_by_key(|a| if a.is_ipv4() { 0 } else { 1 });
+
+        let mut last_err = None;
+        let mut stream_opt = None;
+        let per_addr_timeout = Duration::from_millis(timeout_ms.min(1500));
+        for a in sorted_addrs {
+            match tokio::time::timeout(per_addr_timeout, TcpStream::connect(a)).await {
+                Ok(Ok(s)) => {
+                    stream_opt = Some(s);
+                    break;
+                }
+                Ok(Err(e)) => last_err = Some(e),
+                Err(_) => {
+                    last_err = Some(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        "connect timeout",
+                    ))
+                }
+            }
+        }
+        let stream = stream_opt.ok_or_else(|| {
+            last_err.unwrap_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "no addresses")
+            })
+        })?;
 
         let tls_cfg = get_probe_tls_config();
         let connector = TlsConnector::from(tls_cfg);
@@ -98,6 +125,7 @@ pub fn probe_via_curl(host: &str, timeout_ms: u64) -> ProbeResult {
 
     let output = Command::new("curl")
         .args([
+            "-4",
             "-s",
             "-f",
             "-m",

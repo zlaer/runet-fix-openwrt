@@ -21,7 +21,28 @@ if __name__ == '__main__' and (__package__ is None or __package__ == ''):
 
 SO_ORIGINAL_DST = 80
 
-from .utils import *
+from .utils import (
+    DC_DEFAULT_IPS,
+    DC_IDX_POS,
+    DomainCensorFilter,
+    HANDSHAKE_LEN,
+    IV_LEN,
+    KEY_LEN,
+    PREKEY_LEN,
+    PROTO_ABRIDGED_INT,
+    PROTO_INTERMEDIATE_INT,
+    PROTO_PADDED_INTERMEDIATE_INT,
+    PROTO_TAG_ABRIDGED,
+    PROTO_TAG_INTERMEDIATE,
+    PROTO_TAG_POS,
+    PROTO_TAG_SECURE,
+    RESERVED_CONTINUE,
+    RESERVED_FIRST_BYTES,
+    RESERVED_STARTS,
+    SKIP_LEN,
+    ZERO_64,
+    get_link_host,
+)
 from .stats import stats
 from .config import proxy_config, parse_dc_ip_list, start_cfproxy_domain_refresh, coerce_domain_list
 from .bridge import MsgSplitter, CryptoCtx, do_fallback, bridge_ws_reencrypt, reset_tcp_backoff
@@ -41,6 +62,12 @@ LISTENER_CHECK_INTERVAL = 5.0
 LISTENER_RESTART_DELAY = 1.0
 MAX_HTTP_BODY = 1024 * 1024  # 1 MiB upper bound to prevent OOM
 cf_h2_pool: Optional[CfH2Pool] = None
+
+
+def _mask_secret(sec: str) -> str:
+    if not sec or len(sec) < 8:
+        return "***"
+    return f"{sec[:4]}...{sec[-4:]}"
 
 
 def _try_handshake(handshake: bytes, secret: bytes) -> Optional[Tuple[int, bool, bytes, bytes]]:
@@ -661,7 +688,8 @@ async def _run(stop_event: Optional[asyncio.Event] = None):
     log.info("=" * 60)
     log.info("  Telegram MTProto WS Bridge Proxy")
     log.info("  Listening on   %s:%d", proxy_config.host, proxy_config.port)
-    log.info("  Secret:        %s", proxy_config.secret)
+    log.info("  Secret:        %s", _mask_secret(proxy_config.secret))
+    log.debug("  Full Secret:   %s", proxy_config.secret)
     if ftls:
         log.info("  Fake TLS:      %s", ftls)
     log.info("  Target DC IPs:")
@@ -679,11 +707,10 @@ async def _run(stop_event: Optional[asyncio.Event] = None):
     if proxy_config.disable_secure:
         log.info("  No secure:     enabled (port 80 for CF proxy/worker)")
     log.info("=" * 60)
-    log.info("  Connect:")
     if ftls:
-        log.info("    %s", ee_link)
+        log.debug("  Connect:       %s", ee_link)
     else:
-        log.info("    %s", dd_link)
+        log.debug("  Connect:       %s", dd_link)
     log.info("=" * 60)
 
     async def log_stats():
@@ -813,7 +840,7 @@ def main():
         description='Telegram MTProto WebSocket Bridge Proxy')
     ap.add_argument('-p', '--port', type=int, default=1443,
                     help='Listen port (default 1443)')
-    ap.add_argument('--host', type=str, default='0.0.0.0',
+    ap.add_argument('-l', '--host', type=str, default='0.0.0.0',
                     help='Listen host (default 0.0.0.0)')
     ap.add_argument('-s', '--secret', type=str, default=None,
                     help='MTProto proxy secret (32 hex chars). '
@@ -890,7 +917,8 @@ def main():
             sys.exit(1)
     else:
         secret_hex = os.urandom(16).hex()
-        log.info("Generated secret: %s", secret_hex)
+        log.info("Generated secret: %s", _mask_secret(secret_hex))
+        log.debug("Generated full secret: %s", secret_hex)
 
     proxy_config.port = args.port
     proxy_config.host = args.host
@@ -919,24 +947,7 @@ def main():
     root.addHandler(console)
 
     if args.log_file:
-        try:
-            from .utils.logging_setup import build_log_handler
-        except (ImportError, ValueError):
-            try:
-                from utils.logging_setup import build_log_handler
-            except ImportError:
-                from logging.handlers import RotatingFileHandler
-                def build_log_handler(lf, log_max_mb=5, backups=3):
-                    try:
-                        return RotatingFileHandler(
-                            lf,
-                            maxBytes=max(1, int(log_max_mb)) * 1024 * 1024,
-                            backupCount=int(backups),
-                            encoding='utf-8',
-                        )
-                    except Exception:
-                        return logging.FileHandler(lf, encoding='utf-8')
-
+        from .utils.logging_setup import build_log_handler
         fh = build_log_handler(
             args.log_file,
             log_max_mb=args.log_max_mb,

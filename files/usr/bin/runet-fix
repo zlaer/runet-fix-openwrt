@@ -3,8 +3,8 @@
 # Part of the runet-fix all-in-one suite.
 
 VERSION_FILE="/usr/share/runet-fix/version"
-CURRENT_VERSION="1.5.2"
-[ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(cat "$VERSION_FILE" | tr -d '\r\n ')
+CURRENT_VERSION="unknown"
+[ -f "$VERSION_FILE" ] && CURRENT_VERSION=$(tr -d '\r\n ' < "$VERSION_FILE")
 
 REPO_USER="zlaer"
 REPO_NAME="runet-fix-openwrt"
@@ -103,12 +103,44 @@ EOF
         echo "Repository: https://github.com/$REPO_USER/$REPO_NAME (branch: $REPO_BRANCH)"
 
         TMP_DIR="/tmp/runet-fix-update"
+        BACKUP_DIR="$TMP_DIR/backup"
+        STAGE_DIR="$TMP_DIR/stage"
         rm -rf "$TMP_DIR"
-        mkdir -p "$TMP_DIR"
+        mkdir -p "$TMP_DIR" "$BACKUP_DIR/lists" "$BACKUP_DIR/installed" "$STAGE_DIR"
 
+        echo "Backing up user configuration and custom lists..."
+        [ -f /etc/config/runet-fix ] && cp /etc/config/runet-fix "$BACKUP_DIR/runet-fix.config.bak"
+        # Only preserve user-authored custom lists, allow system lists to be updated
+        for ulist in adblock-whitelist.txt adblock-blacklist.txt zapret-exclude.txt; do
+            [ -f "/usr/share/runet-fix/lists/$ulist" ] && cp "/usr/share/runet-fix/lists/$ulist" "$BACKUP_DIR/lists/$ulist"
+        done
+        # Backup installed files for rollback in case of mid-update failure
+        [ -d /usr/share/runet-fix ] && cp -r /usr/share/runet-fix "$BACKUP_DIR/installed/"
+        [ -f /usr/share/runet-fix/version ] && cp /usr/share/runet-fix/version "$BACKUP_DIR/installed/version"
+        [ -f /etc/init.d/runet-fix ] && cp /etc/init.d/runet-fix "$BACKUP_DIR/installed/init.d-runet-fix"
+
+        RELEASE_TAR_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/runet-fix.tar.gz"
+        RELEASE_SUMS_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/SHA256SUMS"
         TARBALL_URL="https://github.com/$REPO_USER/$REPO_NAME/archive/refs/heads/$REPO_BRANCH.tar.gz"
+
         echo "Downloading update archive..."
-        if ! safe_download "$TARBALL_URL" "$TMP_DIR/update.tar.gz" 60; then
+        download_ok=0
+        if safe_download "$RELEASE_TAR_URL" "$TMP_DIR/update.tar.gz" 60; then
+            if safe_download "$RELEASE_SUMS_URL" "$TMP_DIR/SHA256SUMS" 15 && command -v sha256sum >/dev/null 2>&1; then
+                exp_tar_hash=$(grep "runet-fix.tar.gz" "$TMP_DIR/SHA256SUMS" 2>/dev/null | awk '{print $1}')
+                act_tar_hash=$(sha256sum "$TMP_DIR/update.tar.gz" | awk '{print $1}')
+                if [ -n "$exp_tar_hash" ] && [ "$exp_tar_hash" != "$act_tar_hash" ]; then
+                    echo "Security Warning: Checksum mismatch for release archive! Update aborted." >&2
+                    rm -rf "$TMP_DIR"
+                    exit 1
+                fi
+            fi
+            download_ok=1
+        elif safe_download "$TARBALL_URL" "$TMP_DIR/update.tar.gz" 60; then
+            download_ok=1
+        fi
+
+        if [ "$download_ok" != "1" ]; then
             echo "Error: Failed to download update archive from GitHub!"
             rm -rf "$TMP_DIR"
             exit 1
@@ -121,25 +153,66 @@ EOF
             exit 1
         fi
 
-        SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d -name "$REPO_NAME-*" | head -n 1)
-        if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/files" ]; then
+        SRC_DIR=$(find "$TMP_DIR" -maxdepth 1 -type d \( -name "$REPO_NAME-*" -o -name "runet-fix*" \) | head -n 1)
+        if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR/files" ] || [ ! -d "$SRC_DIR/files/usr/share/runet-fix" ]; then
             echo "Error: Invalid update package structure!"
             rm -rf "$TMP_DIR"
             exit 1
         fi
 
-        echo "Backing up user configuration and custom lists..."
-        [ -f /etc/config/runet-fix ] && cp /etc/config/runet-fix "$TMP_DIR/runet-fix.config.bak"
-        [ -d /usr/share/runet-fix/lists ] && cp -r /usr/share/runet-fix/lists "$TMP_DIR/lists.bak"
+        echo "Staging updated files..."
+        mkdir -p "$STAGE_DIR/usr/share/runet-fix" "$STAGE_DIR/usr/bin" "$STAGE_DIR/etc/init.d"
+        mkdir -p "$STAGE_DIR/usr/share/luci/menu.d" "$STAGE_DIR/usr/share/rpcd/acl.d" "$STAGE_DIR/www/luci-static/resources/view/runet-fix"
+        cp -r "$SRC_DIR/files/usr/bin/"* "$STAGE_DIR/usr/bin/"
+        cp -r "$SRC_DIR/files/usr/share/runet-fix/"* "$STAGE_DIR/usr/share/runet-fix/"
+        cp "$SRC_DIR/files/etc/init.d/runet-fix" "$STAGE_DIR/etc/init.d/"
+        [ -d "$SRC_DIR/files/usr/share/luci/menu.d" ] && cp -r "$SRC_DIR/files/usr/share/luci/menu.d/"* "$STAGE_DIR/usr/share/luci/menu.d/"
+        [ -d "$SRC_DIR/files/usr/share/rpcd/acl.d" ] && cp -r "$SRC_DIR/files/usr/share/rpcd/acl.d/"* "$STAGE_DIR/usr/share/rpcd/acl.d/"
+        [ -d "$SRC_DIR/files/www/luci-static/resources/view/runet-fix" ] && cp -r "$SRC_DIR/files/www/luci-static/resources/view/runet-fix/"* "$STAGE_DIR/www/luci-static/resources/view/runet-fix/"
+        [ -f "$SRC_DIR/version" ] && cp "$SRC_DIR/version" "$STAGE_DIR/version"
+
+        # Restore user custom lists into staging without overwriting freshly updated system lists
+        for ulist in adblock-whitelist.txt adblock-blacklist.txt zapret-exclude.txt; do
+            if [ -f "$BACKUP_DIR/lists/$ulist" ]; then
+                cp "$BACKUP_DIR/lists/$ulist" "$STAGE_DIR/usr/share/runet-fix/lists/$ulist"
+            fi
+        done
 
         echo "Installing updated files..."
-        cp -r "$SRC_DIR/files/usr/bin/"* /usr/bin/ 2>/dev/null || true
-        cp -r "$SRC_DIR/files/usr/share/runet-fix/"* /usr/share/runet-fix/ 2>/dev/null || true
-        cp -r "$SRC_DIR/files/usr/share/luci/menu.d/"* /usr/share/luci/menu.d/ 2>/dev/null || true
-        cp -r "$SRC_DIR/files/usr/share/rpcd/acl.d/"* /usr/share/rpcd/acl.d/ 2>/dev/null || true
-        cp -r "$SRC_DIR/files/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/ 2>/dev/null || true
-        cp -r "$SRC_DIR/files/etc/init.d/runet-fix" /etc/init.d/
-        [ -f "$SRC_DIR/version" ] && cp "$SRC_DIR/version" /usr/share/runet-fix/version
+        install_failed=0
+        if ! cp -r "$STAGE_DIR/usr/share/runet-fix/"* /usr/share/runet-fix/; then
+            install_failed=1
+        fi
+        if ! cp -r "$STAGE_DIR/usr/bin/"* /usr/bin/; then
+            install_failed=1
+        fi
+        if ! cp "$STAGE_DIR/etc/init.d/runet-fix" /etc/init.d/; then
+            install_failed=1
+        fi
+        if [ -d "$STAGE_DIR/usr/share/luci/menu.d" ]; then
+            cp -r "$STAGE_DIR/usr/share/luci/menu.d/"* /usr/share/luci/menu.d/ 2>/dev/null || true
+        fi
+        if [ -d "$STAGE_DIR/usr/share/rpcd/acl.d" ]; then
+            cp -r "$STAGE_DIR/usr/share/rpcd/acl.d/"* /usr/share/rpcd/acl.d/ 2>/dev/null || true
+        fi
+        if [ -d "$STAGE_DIR/www/luci-static/resources/view/runet-fix" ]; then
+            cp -r "$STAGE_DIR/www/luci-static/resources/view/runet-fix/"* /www/luci-static/resources/view/runet-fix/ 2>/dev/null || true
+        fi
+
+        if [ "$install_failed" = "1" ]; then
+            echo "Error: File installation failed! Rolling back changes..." >&2
+            if [ -d "$BACKUP_DIR/installed/runet-fix" ]; then
+                cp -r "$BACKUP_DIR/installed/runet-fix/"* /usr/share/runet-fix/ 2>/dev/null || true
+            fi
+            if [ -f "$BACKUP_DIR/installed/init.d-runet-fix" ]; then
+                cp "$BACKUP_DIR/installed/init.d-runet-fix" /etc/init.d/runet-fix 2>/dev/null || true
+            fi
+            if [ -f "$BACKUP_DIR/installed/version" ]; then
+                cp "$BACKUP_DIR/installed/version" /usr/share/runet-fix/version 2>/dev/null || true
+            fi
+            rm -rf "$TMP_DIR"
+            exit 1
+        fi
 
         # Update native Rust core binary if applicable with SHA256 integrity check
         ARCH=""
@@ -169,12 +242,8 @@ EOF
             fi
         fi
 
-        # Restore custom lists preserving user additions
-        if [ -d "$TMP_DIR/lists.bak" ]; then
-            for f in "$TMP_DIR/lists.bak"/*; do
-                [ -f "$f" ] && cp "$f" /usr/share/runet-fix/lists/
-            done
-        fi
+        # Successfully finished file copy, commit the new version file
+        [ -f "$STAGE_DIR/version" ] && cp "$STAGE_DIR/version" /usr/share/runet-fix/version
 
         echo "Setting file permissions..."
         chmod +x /etc/init.d/runet-fix /usr/bin/runet-fix
@@ -229,26 +298,60 @@ EOF
         fi
         ;;
     test)
+        tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
+        case "$tg_port" in ''|*[!0-9]*) tg_port=1443 ;; esac
+
         if [ "$2" = "--json" ]; then
-            yt_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:2.5")
+            if ! command -v curl >/dev/null 2>&1; then
+                cat <<EOF
+{
+  "youtube": {"ok": 0, "code": "000", "ms": 0, "message": "curl is not installed"},
+  "discord": {"ok": 0, "code": "000", "ms": 0, "message": "curl is not installed"},
+  "telegram": {"ok": 0, "stats": {}},
+  "dns": {"ok": 0, "adblock_ok": 0}
+}
+EOF
+                exit 0
+            fi
+
+            yt_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://www.youtube.com" 2>/dev/null || echo "000:0")
             yt_code=$(echo "$yt_raw" | cut -d: -f1)
             yt_time=$(echo "$yt_raw" | cut -d: -f2)
-            yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }")
+            case "$yt_code" in ''|*[!0-9]*) yt_code="000" ;; esac
+            case "$yt_time" in ''|*[!0-9.]*) yt_time="0" ;; esac
+            yt_ms=$(awk "BEGIN { print int($yt_time * 1000) }" 2>/dev/null || echo "0")
+            case "$yt_ms" in ''|*[!0-9]*) yt_ms=0 ;; esac
             yt_ok=0; [ "$yt_code" != "000" ] && [ -n "$yt_code" ] && yt_ok=1
 
-            dc_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:2.5")
+            dc_raw=$(curl -s -m 2.5 -w "%{http_code}:%{time_total}" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "000:0")
             dc_code=$(echo "$dc_raw" | cut -d: -f1)
             dc_time=$(echo "$dc_raw" | cut -d: -f2)
-            dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }")
+            case "$dc_code" in ''|*[!0-9]*) dc_code="000" ;; esac
+            case "$dc_time" in ''|*[!0-9.]*) dc_time="0" ;; esac
+            dc_ms=$(awk "BEGIN { print int($dc_time * 1000) }" 2>/dev/null || echo "0")
+            case "$dc_ms" in ''|*[!0-9]*) dc_ms=0 ;; esac
             dc_ok=0; [ "$dc_code" != "000" ] && [ -n "$dc_code" ] && dc_ok=1
 
             tg_daemon=0
-            if netstat -tlpn 2>/dev/null | grep -q ":1443 "; then
+            if command -v nc >/dev/null 2>&1; then
+                if nc -z 127.0.0.1 "$tg_port" >/dev/null 2>&1; then tg_daemon=1; fi
+            elif netstat -tlpn 2>/dev/null | grep -q ":$tg_port "; then
                 tg_daemon=1
             fi
 
             tg_stats="{}"
-            [ -f /tmp/tg-ws-proxy-stats.json ] && tg_stats=$(cat /tmp/tg-ws-proxy-stats.json 2>/dev/null || echo "{}")
+            if [ -f /tmp/tg-ws-proxy-stats.json ]; then
+                raw_stats=$(cat /tmp/tg-ws-proxy-stats.json 2>/dev/null)
+                if command -v jsonfilter >/dev/null 2>&1; then
+                    if echo "$raw_stats" | jsonfilter -e '@' >/dev/null 2>&1; then
+                        tg_stats="$raw_stats"
+                    fi
+                elif command -v python3 >/dev/null 2>&1; then
+                    if echo "$raw_stats" | python3 -c 'import sys, json; json.load(sys.stdin)' >/dev/null 2>&1; then
+                        tg_stats="$raw_stats"
+                    fi
+                fi
+            fi
 
             dns_ok=0; if nslookup google.com 127.0.0.1 >/dev/null 2>&1; then dns_ok=1; fi
             ad_ok=0; if nslookup ad.ae.doubleclick.net 127.0.0.1 2>/dev/null | grep -q 'NXDOMAIN\|0.0.0.0'; then ad_ok=1; fi
@@ -282,12 +385,34 @@ EOF
         dc_test=$(curl -s -m 3 -w "%{http_code}:%{time_total}s" -o /dev/null "https://gateway.discord.gg" 2>/dev/null || echo "FAIL")
         echo "$dc_test"
 
-        echo -n "Testing Telegram local transparent proxy daemon (127.0.0.1:1443)... "
-        if netstat -tlpn 2>/dev/null | grep -q ":1443 "; then echo "OK (Listening)"; else echo "FAIL (Stopped)"; fi
+        echo -n "Testing Telegram local transparent proxy daemon (127.0.0.1:$tg_port)... "
+        if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 "$tg_port" >/dev/null 2>&1; then
+            echo "OK (Listening)"
+        elif netstat -tlpn 2>/dev/null | grep -q ":$tg_port "; then
+            echo "OK (Listening)"
+        else
+            echo "FAIL (Stopped)"
+        fi
         echo "============================================="
         ;;
     log|logs)
         logread -e "runet-fix" -e "tg-ws-proxy" -e "nfqws" | tail -n 50
+        ;;
+    zapret-args)
+        shift
+        if [ -x /etc/init.d/runet-fix ]; then
+            /etc/init.d/runet-fix zapret_args "$@"
+        fi
+        ;;
+    help|--help|-h)
+        echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"
+        echo "Usage: runet-fix {start|stop|restart|status|version|check-update|update|update-adblock|update-hosts|firewall|test|autotune|log|uninstall}"
+        echo "       runet-fix autotune [--json] [--apply]"
+        echo "       runet-fix version [--json]"
+        echo "       runet-fix check-update [--json]"
+        echo "       runet-fix update"
+        echo "       runet-fix test [--json]"
+        exit 0
         ;;
     *)
         echo "runet-fix CLI v$CURRENT_VERSION - All-in-One DPI Bypass, Telegram Fix & Adblock"

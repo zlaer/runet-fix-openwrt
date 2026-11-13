@@ -6,7 +6,13 @@ import time
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlencode
 
-from .utils import *
+from .utils import (
+    PROTO_ABRIDGED_INT,
+    PROTO_INTERMEDIATE_INT,
+    PROTO_PADDED_INTERMEDIATE_INT,
+    PROTO_TAG_ABRIDGED,
+    human_bytes,
+)
 from .stats import stats
 from .balancer import balancer
 from .config import proxy_config

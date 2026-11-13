@@ -18,6 +18,7 @@ use crate::os::uci;
 const CONF_DIR: &str = "/tmp/dnsmasq.d";
 const CONF_FILE: &str = "/tmp/dnsmasq.d/runet-fix-adblock.conf";
 const COUNT_FILE: &str = "/tmp/runet-fix-adblock.count";
+const LOCK_DIR: &str = "/var/lock/runet-fix-adblock";
 
 const WHITELIST_PATH: &str = "/usr/share/runet-fix/lists/adblock-whitelist.txt";
 const BLACKLIST_PATH: &str = "/usr/share/runet-fix/lists/adblock-blacklist.txt";
@@ -30,7 +31,80 @@ const ADGUARD_RU_FIRSTPARTY: &str =
 const NOCOIN_MINERS: &str =
     "https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/hosts.txt";
 
+struct AdblockLock;
+
+impl AdblockLock {
+    fn acquire() -> Result<Self, String> {
+        let path = Path::new(LOCK_DIR);
+        if path.exists() {
+            let pid = fs::read_to_string(path.join("pid"))
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
+            if !pid.is_empty() && Path::new(&format!("/proc/{}", pid)).exists() {
+                return Err(pid);
+            }
+            let _ = fs::remove_dir_all(path);
+        }
+        fs::create_dir_all(path).map_err(|e| e.to_string())?;
+        fs::write(path.join("pid"), std::process::id().to_string()).map_err(|e| e.to_string())?;
+        Ok(AdblockLock)
+    }
+}
+
+impl Drop for AdblockLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(LOCK_DIR);
+    }
+}
+
+fn sync_cron() {
+    let auto_update =
+        uci::get("runet-fix.adblock.auto_update").unwrap_or_else(|| "weekly".to_string());
+    let cron_path = "/etc/crontabs/root";
+    let _ = fs::create_dir_all("/etc/crontabs");
+    let current = fs::read_to_string(cron_path).unwrap_or_default();
+    let new_lines: Vec<&str> = current
+        .lines()
+        .filter(|l| !l.contains("runet-fix-adblock"))
+        .collect();
+
+    let cron_entry = match auto_update.as_str() {
+        "daily" => Some("0 4 * * * /usr/share/runet-fix/scripts/update-adblock.sh >/dev/null 2>&1 # runet-fix-adblock"),
+        "weekly" => Some("0 4 * * 0 /usr/share/runet-fix/scripts/update-adblock.sh >/dev/null 2>&1 # runet-fix-adblock"),
+        _ => None,
+    };
+
+    let mut content = new_lines.join("\n");
+    if let Some(entry) = cron_entry {
+        if !content.is_empty() {
+            content.push('\n');
+        }
+        content.push_str(entry);
+        content.push('\n');
+        let _ = Command::new("/etc/init.d/cron").arg("enable").status();
+    } else if !content.is_empty() {
+        content.push('\n');
+    }
+
+    if fs::write(cron_path, content).is_ok() {
+        let _ = Command::new("/etc/init.d/cron").arg("restart").status();
+    }
+}
+
 pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
+    let _lock = match AdblockLock::acquire() {
+        Ok(lock) => lock,
+        Err(pid) => {
+            eprintln!(
+                "[runet-fix:adblock] Another adblock update is running (PID {}). Aborting.",
+                pid
+            );
+            return Err("Adblock update already running".into());
+        }
+    };
+
+    sync_cron();
+
     let start_time = Instant::now();
 
     let mut profile =
@@ -147,13 +221,27 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         total
     );
 
-    // 6. Write formatted dnsmasq configuration directly
-    let file = File::create(CONF_FILE)?;
-    let mut writer = BufWriter::with_capacity(65536, file);
-    for domain in &blocked_domains {
-        writeln!(writer, "address=/{}/", domain)?;
+    // Safeguard: Do not replace running configuration if sources failed or count is suspiciously low
+    let min_threshold = if profile == "micro" { 500 } else { 5000 };
+    if total < min_threshold {
+        eprintln!(
+            "[runet-fix:adblock] Error: Domain count ({}) below safety threshold ({}). Aborting to preserve existing configuration.",
+            total, min_threshold
+        );
+        return Err(format!("Domain count {} below threshold {}", total, min_threshold).into());
     }
-    writer.flush()?;
+
+    // 6. Write formatted dnsmasq configuration atomically via temp file
+    let tmp_conf = format!("{}.tmp.{}", CONF_FILE, std::process::id());
+    {
+        let file = File::create(&tmp_conf)?;
+        let mut writer = BufWriter::with_capacity(65536, file);
+        for domain in &blocked_domains {
+            writeln!(writer, "address=/{}/", domain)?;
+        }
+        writer.flush()?;
+    }
+    fs::rename(&tmp_conf, CONF_FILE)?;
 
     #[cfg(unix)]
     {
@@ -166,8 +254,14 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let _ = fs::write(COUNT_FILE, format!("{}\n", total));
 
     // 7. Restart or notify dnsmasq
-    println!("[runet-fix:adblock] Notifying dnsmasq...");
-    let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
+    println!("[runet-fix:adblock] Reloading dnsmasq configuration...");
+    if Command::new("/etc/init.d/dnsmasq")
+        .arg("restart")
+        .status()
+        .is_err()
+    {
+        let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
+    }
 
     let elapsed = start_time.elapsed();
     println!(
@@ -178,4 +272,52 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_adblock_fixture_compilation() {
+        let raw_fixture = "\
+# Comment line
+0.0.0.0 doubleclick.net
+127.0.0.1 adservice.google.com
+||badtracker.ru^
+*.tracking.sub.example.com
+! ABP comment
+0.0.0.0 whitelisted.com
+0.0.0.0 sub.whitelisted.com
+";
+        let whitelist_fixture = "\
+whitelisted.com
+";
+        let mut wl = WhitelistMatcher::new();
+        for line in whitelist_fixture.lines() {
+            wl.add_domain(line);
+        }
+
+        let mut blocked = HashSet::new();
+        for line in raw_fixture.lines() {
+            if let Some(dom) = extract_domain(line) {
+                if !wl.is_whitelisted(&dom) {
+                    blocked.insert(dom);
+                }
+            }
+        }
+
+        let mut sorted: Vec<_> = blocked.into_iter().collect();
+        sorted.sort();
+
+        assert_eq!(
+            sorted,
+            vec![
+                "adservice.google.com",
+                "badtracker.ru",
+                "doubleclick.net",
+                "tracking.sub.example.com",
+            ]
+        );
+    }
 }

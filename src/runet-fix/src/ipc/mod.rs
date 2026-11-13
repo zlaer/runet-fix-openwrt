@@ -61,13 +61,15 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
                         let misses = POOL_MISSES.load(Ordering::Relaxed);
                         let uptime = start_time.elapsed().as_secs();
 
-                        let adb_rules = fs::read_to_string("/tmp/runet-fix-adblock.count")
+                        let adb_rules: u64 = fs::read_to_string("/tmp/runet-fix-adblock.count")
                             .unwrap_or_else(|_| "0".to_string())
                             .trim()
-                            .to_string();
+                            .parse()
+                            .unwrap_or(0);
 
                         let preset = crate::os::uci::get("runet-fix.zapret.preset")
                             .unwrap_or_else(|| "youtube_4k".to_string());
+                        let preset_escaped = crate::util::json_escape(&preset);
 
                         format!(
                             "{{\"status\":\"ok\",\"version\":\"{}\",\"uptime_secs\":{},\"active_sessions\":{},\"total_sessions\":{},\"pool_hits\":{},\"pool_misses\":{},\"adblock_rules\":{},\"preset\":\"{}\"}}\n",
@@ -78,7 +80,7 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
                             hits,
                             misses,
                             adb_rules,
-                            preset
+                            preset_escaped
                         )
                     }
                     _ => "{\"status\":\"error\",\"message\":\"unknown command\"}\n".to_string(),

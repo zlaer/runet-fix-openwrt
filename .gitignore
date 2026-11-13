@@ -16,3 +16,5 @@ __pycache__/
 # Temporary scratch
 scratch/
 .system_generated/
+scripts/deploy_*.py
+ROADMAP_AI_PROMPT.md

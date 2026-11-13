@@ -4,6 +4,17 @@
 
 set -e
 
+# Initialize state variables
+SRC=""
+TMP_INSTALL=""
+TMP_SUMS=""
+
+cleanup() {
+    [ -n "$TMP_INSTALL" ] && [ -d "$TMP_INSTALL" ] && rm -rf "$TMP_INSTALL"
+    [ -n "$TMP_SUMS" ] && [ -f "$TMP_SUMS" ] && rm -f "$TMP_SUMS"
+}
+trap cleanup EXIT INT TERM
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -18,6 +29,12 @@ echo "${BLUE}======================================================${NC}"
 # Check root privileges
 if [ "$(id -u)" != "0" ]; then
     echo "${RED}Error: This script must be run as root on the router.${NC}"
+    exit 1
+fi
+
+# Ensure at least one download tool is present before starting
+if ! command -v curl >/dev/null 2>&1 && ! command -v uclient-fetch >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+    echo "${RED}Error: Neither curl, uclient-fetch, nor wget found. Cannot proceed.${NC}" >&2
     exit 1
 fi
 
@@ -42,8 +59,18 @@ pkg_install() {
 safe_download() {
     local url="$1"
     local output="$2"
-    if curl -s -f -L --connect-timeout 8 "$url" -o "$output"; then
-        return 0
+    if command -v curl >/dev/null 2>&1; then
+        if curl -s -f -L --connect-timeout 8 "$url" -o "$output"; then
+            return 0
+        fi
+    elif command -v uclient-fetch >/dev/null 2>&1; then
+        if uclient-fetch -q --timeout=8 "$url" -O "$output"; then
+            return 0
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if wget -q -T 8 "$url" -O "$output"; then
+            return 0
+        fi
     fi
     echo "${RED}Error: Failed to securely download $url via TLS.${NC}" >&2
     echo "${YELLOW}Hint: If TLS verification fails, please update certificates or check system time:${NC}" >&2
@@ -92,6 +119,13 @@ pkg_update
 echo "${YELLOW}[2/5] Installing prerequisite kernel modules and tools...${NC}"
 pkg_install ipset curl ca-bundle $FW_PKGS
 
+# Ensure curl is available after package installation
+if ! command -v curl >/dev/null 2>&1; then
+    echo "${RED}Error: 'curl' is required but could not be installed.${NC}" >&2
+    echo "${YELLOW}Please check network/repositories and install curl manually: opkg update && opkg install curl${NC}" >&2
+    exit 1
+fi
+
 # Optional python or native binary support
 if ! command -v python3 >/dev/null 2>&1 && [ ! -f /usr/bin/runet-fix-core ] && [ ! -f /usr/bin/tg-ws-proxy ]; then
     echo "${YELLOW}Installing lightweight Python 3 for Telegram WS proxy fallback...${NC}"
@@ -121,13 +155,13 @@ if [ -d "$REPO_DIR/files" ]; then
     [ -f /etc/config/runet-fix ] || cp "$REPO_DIR/files/etc/config/runet-fix" /etc/config/
 else
     echo "${YELLOW}Downloading repository archive from GitHub (master branch)...${NC}"
-    TMP_INSTALL="/tmp/runet-fix-install"
+    TMP_INSTALL=$(mktemp -d /tmp/runet-fix-install.XXXXXX 2>/dev/null || echo "/tmp/runet-fix-install")
     rm -rf "$TMP_INSTALL"
     mkdir -p "$TMP_INSTALL"
     if safe_download "https://github.com/zlaer/runet-fix-openwrt/archive/refs/heads/master.tar.gz" "$TMP_INSTALL/master.tar.gz"; then
         tar -xzf "$TMP_INSTALL/master.tar.gz" -C "$TMP_INSTALL/"
         SRC=$(find "$TMP_INSTALL" -maxdepth 1 -type d -name "runet-fix-openwrt*" | head -n 1)
-        if [ -n "$SRC" ] && [ -d "$SRC/files" ]; then
+        if [ -n "$SRC" ] && [ -d "$SRC/files" ] && [ -d "$SRC/files/usr/share/runet-fix" ] && [ -f "$SRC/files/etc/init.d/runet-fix" ]; then
             cp -r "$SRC/files/usr/bin/"* /usr/bin/ 2>/dev/null || true
             cp -r "$SRC/files/usr/share/runet-fix/"* /usr/share/runet-fix/
             cp -r "$SRC/files/usr/share/luci/menu.d/"* /usr/share/luci/menu.d/
@@ -136,9 +170,14 @@ else
             cp -r "$SRC/files/etc/init.d/runet-fix" /etc/init.d/
             [ -f "$SRC/version" ] && cp "$SRC/version" /usr/share/runet-fix/version
             [ -f /etc/config/runet-fix ] || cp "$SRC/files/etc/config/runet-fix" /etc/config/
+        else
+            echo "${RED}Error: Downloaded package structure is invalid or files are missing!${NC}" >&2
+            exit 1
         fi
+    else
+        echo "${RED}Error: Failed to download repository archive!${NC}" >&2
+        exit 1
     fi
-    rm -rf "$TMP_INSTALL"
 fi
 
 echo "${YELLOW}[4/5] Checking for Zapret nfqws and Telegram proxy binaries...${NC}"
@@ -167,6 +206,7 @@ if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
     # Only accept a non-empty ELF binary; never chmod an HTML error page.
     if [ -s /opt/zapret/nfq/nfqws ] && [ "$(head -c 4 /opt/zapret/nfq/nfqws | od -An -tx1 | tr -d ' \n')" = "7f454c46" ]; then
         chmod +x /opt/zapret/nfq/nfqws 2>/dev/null || true
+        touch /opt/zapret/.runet-fix-managed 2>/dev/null || true
     else
         rm -f /opt/zapret/nfq/nfqws
         echo "${YELLOW}Warning: nfqws download failed or returned invalid data; skipping.${NC}" >&2
@@ -174,7 +214,8 @@ if ! command -v nfqws >/dev/null 2>&1 && [ ! -f /opt/zapret/nfq/nfqws ]; then
 fi
 
 # Multi-arch Telegram and Rust Core setup
-CORE_BIN_URL="https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/master/prebuilt"
+RELEASE_BIN_URL="https://github.com/zlaer/runet-fix-openwrt/releases/latest/download"
+FALLBACK_BIN_URL="https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/master/prebuilt"
 TG_ARCH=""
 case "$ARCH" in
     aarch64*|arm64)
@@ -190,6 +231,7 @@ esac
 
 if [ -n "$TG_ARCH" ]; then
     INSTALLED_CORE=0
+    USED_RELEASE=0
     if [ -f "$REPO_DIR/prebuilt/runet-fix-$TG_ARCH" ]; then
         echo "Installing native runet-fix-$TG_ARCH from local repo..."
         cp "$REPO_DIR/prebuilt/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core
@@ -207,11 +249,19 @@ if [ -n "$TG_ARCH" ]; then
         cp "$SRC/prebuilt/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core
         INSTALLED_CORE=1
     else
-        echo "Downloading native runet-fix-core for $TG_ARCH..."
-        if safe_download "$CORE_BIN_URL/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core; then
+        echo "Downloading native runet-fix-core for $TG_ARCH from latest release..."
+        if safe_download "$RELEASE_BIN_URL/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core; then
             INSTALLED_CORE=1
-        elif safe_download "$CORE_BIN_URL/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core; then
-            INSTALLED_CORE=1
+            USED_RELEASE=1
+        else
+            echo "${YELLOW}Release artifact not found; falling back to master branch prebuilt...${NC}"
+            if safe_download "$FALLBACK_BIN_URL/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core; then
+                INSTALLED_CORE=1
+                USED_RELEASE=0
+            elif safe_download "$FALLBACK_BIN_URL/tg-ws-proxy-$TG_ARCH" /usr/bin/runet-fix-core; then
+                INSTALLED_CORE=1
+                USED_RELEASE=0
+            fi
         fi
     fi
 
@@ -223,29 +273,30 @@ if [ -n "$TG_ARCH" ]; then
         elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/SHA256SUMS" ]; then
             sum_file="$SRC/prebuilt/SHA256SUMS"
         else
-            # Downloaded core: fetch the matching checksum list from the same source.
-            sum_file=$(mktemp /tmp/runet-fix-sums.XXXXXX 2>/dev/null) || sum_file=""
-            if [ -n "$sum_file" ] && ! safe_download "$CORE_BIN_URL/SHA256SUMS" "$sum_file"; then
-                rm -f "$sum_file"
-                sum_file=""
+            # Downloaded core: fetch the matching checksum list from release or master.
+            TMP_SUMS=$(mktemp /tmp/runet-fix-sums.XXXXXX 2>/dev/null || echo "/tmp/runet-fix-sums")
+            sum_file="$TMP_SUMS"
+            if [ "$USED_RELEASE" = "1" ]; then
+                if ! safe_download "$RELEASE_BIN_URL/SHA256SUMS" "$sum_file"; then
+                    safe_download "$FALLBACK_BIN_URL/SHA256SUMS" "$sum_file" || sum_file=""
+                fi
+            else
+                safe_download "$FALLBACK_BIN_URL/SHA256SUMS" "$sum_file" || sum_file=""
             fi
         fi
-        if [ -n "$sum_file" ]; then
+        if [ -n "$sum_file" ] && [ -f "$sum_file" ]; then
             exp_hash=$(grep "runet-fix-$TG_ARCH" "$sum_file" 2>/dev/null | awk '{print $1}')
             [ -z "$exp_hash" ] && exp_hash=$(grep "tg-ws-proxy-$TG_ARCH" "$sum_file" 2>/dev/null | awk '{print $1}')
             if [ -n "$exp_hash" ]; then
                 if ! verify_sha256 /usr/bin/runet-fix-core "$exp_hash"; then
-                    echo "${RED}Integrity check failed: aborting native binary deployment.${NC}"
+                    echo "${RED}Integrity check failed: checksum mismatch for /usr/bin/runet-fix-core! Installation aborted.${NC}" >&2
                     rm -f /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
-                    INSTALLED_CORE=0
+                    exit 1
                 fi
             fi
-            case "$sum_file" in /tmp/*) rm -f "$sum_file" ;; esac
         fi
-        if [ "$INSTALLED_CORE" = "1" ]; then
-            chmod +x /usr/bin/runet-fix-core 2>/dev/null || true
-            ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
-        fi
+        chmod +x /usr/bin/runet-fix-core 2>/dev/null || true
+        ln -sf /usr/bin/runet-fix-core /usr/bin/tg-ws-proxy
     fi
 fi
 

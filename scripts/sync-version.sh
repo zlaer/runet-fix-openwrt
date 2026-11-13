@@ -48,14 +48,4 @@ subst "$ROOT/Makefile" "s/^PKG_VERSION:=[0-9][0-9.]*/PKG_VERSION:=$VERSION/"
 # README release badge.
 subst "$ROOT/README.md" "s/Release-v[0-9][0-9.]*-orange\.svg/Release-v$VERSION-orange.svg/"
 
-# init.d fallback version (used only when the version file is missing).
-subst "$ROOT/files/etc/init.d/runet-fix" "s/local ver=\"[0-9][0-9.]*\"/local ver=\"$VERSION\"/"
-
-# LuCI view fallbacks.
-subst "$ROOT/files/www/luci-static/resources/view/runet-fix/overview.js" \
-    "s/'[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*'/'$VERSION'/g"
-
-# Shell CLI fallback version.
-subst "$ROOT/files/usr/bin/runet-fix" "s/^CURRENT_VERSION=\"[0-9][0-9.]*\"/CURRENT_VERSION=\"$VERSION\"/"
-
 echo "sync-version: derived copies set to $VERSION"

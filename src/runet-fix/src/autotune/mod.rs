@@ -170,7 +170,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
 
     let orig_preset =
         uci::get("runet-fix.zapret.preset").unwrap_or_else(|| "youtube_4k".to_string());
-    let qnum = uci::get("runet-fix.zapret.qnum").unwrap_or_else(|| "200".to_string());
+    let qnum = uci::get("runet-fix.zapret.qnum")
+        .filter(|s| s.parse::<u16>().map(|v| v > 0).unwrap_or(false))
+        .unwrap_or_else(|| "200".to_string());
     let nfq_bin = find_nfqws();
 
     let candidates = [
@@ -293,14 +295,19 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         for r in &results {
             json_arr.push(format!(
                 "{{\"preset\":\"{}\",\"yt_code\":\"{}\",\"yt_ms\":{},\"dc_code\":\"{}\",\"dc_ms\":{},\"score\":{}}}",
-                r.preset, r.yt_code, r.yt_ms, r.dc_code, r.dc_ms, r.score
+                crate::util::json_escape(&r.preset),
+                crate::util::json_escape(&r.yt_code),
+                r.yt_ms,
+                crate::util::json_escape(&r.dc_code),
+                r.dc_ms,
+                r.score
             ));
         }
         let applied_int = if do_apply { 1 } else { 0 };
         println!(
             "{{\"results\":[{}],\"best_preset\":\"{}\",\"applied\":{}}}",
             json_arr.join(","),
-            best_preset,
+            crate::util::json_escape(&best_preset),
             applied_int
         );
     } else {

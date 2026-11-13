@@ -28,7 +28,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   checks:
@@ -49,38 +49,11 @@ jobs:
         with:
           workspaces: src/runet-fix
 
-      - name: cargo fmt
-        working-directory: src/runet-fix
-        run: cargo fmt --check
+      - name: Install verification tools (shellcheck, gettext)
+        run: sudo apt-get update && sudo apt-get install -y shellcheck gettext
 
-      - name: cargo clippy
-        working-directory: src/runet-fix
-        run: cargo clippy --all-targets -- -D warnings
-
-      - name: cargo test
-        working-directory: src/runet-fix
-        run: cargo test
-
-      - name: Python syntax check
-        run: python3 -m compileall -q files/usr/share/runet-fix/tg_ws_proxy
-
-      - name: Python unit tests
-        run: python3 -m unittest discover -s files/usr/share/runet-fix/tg_ws_proxy -t files/usr/share/runet-fix -p "test_*.py"
-
-      - name: LuCI JavaScript syntax check
-        run: node --check files/www/luci-static/resources/view/runet-fix/overview.js
-
-      - name: Shell syntax check
-        run: |
-          sh -n install.sh
-          sh -n files/usr/bin/runet-fix
-          sh -n files/etc/init.d/runet-fix
-          for f in files/usr/share/runet-fix/scripts/*.sh scripts/*.sh; do
-            sh -n "$f"
-          done
-
-      - name: Version consistency
-        run: sh scripts/check-version.sh
+      - name: Run unified verification suite (scripts/check.sh)
+        run: sh scripts/check.sh
 
   build:
     name: Build ${{ matrix.name }}
@@ -115,7 +88,12 @@ jobs:
 
       - name: Install Cross and UPX
         run: |
-          curl -sL https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-musl.tar.gz | sudo tar xz -C /usr/local/bin
+          CROSS_URL="https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-musl.tar.gz"
+          CROSS_EXPECTED="a486cefa6cb486971b97be321ea9dfc2e90c1979550295314a368f53fab6d588"
+          curl -sL "$CROSS_URL" -o cross.tar.gz
+          echo "$CROSS_EXPECTED  cross.tar.gz" | sha256sum -c -
+          sudo tar xz -C /usr/local/bin -f cross.tar.gz
+          rm -f cross.tar.gz
           sudo apt-get update && sudo apt-get install -y upx-ucl
 
       - name: Build target with cross
@@ -144,8 +122,12 @@ jobs:
           fi
           echo "Raw binary size:"
           ls -lh "$DST"
-          upx --best "$DST" || true
-          echo "Final compressed binary size:"
+          if upx --best "$DST"; then
+            echo "UPX compression succeeded."
+          else
+            echo "Warning: UPX compression did not reduce size; keeping uncompressed binary."
+          fi
+          echo "Final binary size:"
           ls -lh "$DST"
           cp "$DST" "$LEGACY"
 
@@ -173,6 +155,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -200,3 +184,17 @@ jobs:
             release_assets/tg-ws-proxy-x86_64
             release_assets/SHA256SUMS
           generate_release_notes: true
+
+      - name: Sync updated prebuilt binaries to repository
+        run: |
+          mkdir -p prebuilt
+          cp release_assets/runet-fix-* prebuilt/ 2>/dev/null || true
+          cp release_assets/tg-ws-proxy-* prebuilt/ 2>/dev/null || true
+          cp release_assets/SHA256SUMS prebuilt/ 2>/dev/null || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add prebuilt/
+          if ! git diff --cached --quiet; then
+            git commit -m "prebuilt: sync release artifacts [skip ci]"
+            git push origin master || true
+          fi

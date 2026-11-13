@@ -83,6 +83,7 @@ impl AsyncWrite for WsStream {
 pub struct RawWebSocket {
     stream: WsStream,
     read_buf: Vec<u8>,
+    read_pos: usize,
 }
 
 impl RawWebSocket {
@@ -113,7 +114,10 @@ impl RawWebSocket {
     ) -> io::Result<Self> {
         tokio::time::timeout(timeout_dur, async move {
             let addr = format!("{}:{}", host, port);
-            let addrs = tokio::net::lookup_host(&addr).await?;
+            let raw_addrs = tokio::net::lookup_host(&addr).await?;
+            let mut addrs: Vec<_> = raw_addrs.collect();
+            // Prioritize IPv4 for upstream WS connects to bypass broken IPv6 WAN routes
+            addrs.sort_by_key(|a| if a.is_ipv4() { 0 } else { 1 });
             let mut last_err = None;
             let mut connected_stream = None;
 
@@ -174,6 +178,7 @@ impl RawWebSocket {
             let mut ws = RawWebSocket {
                 stream,
                 read_buf: Vec::with_capacity(4096),
+                read_pos: 0,
             };
 
             ws.perform_http_upgrade(domain, path).await?;
@@ -298,8 +303,18 @@ impl RawWebSocket {
     /// Receives a binary frame from the server, transparently answering PINGs with PONG.
     pub async fn recv_binary(&mut self, out_buf: &mut Vec<u8>) -> io::Result<usize> {
         loop {
+            // Periodic compaction: if cursor reached buffer end, clear in O(1);
+            // if unconsumed prefix is large, drain accumulated dead space
+            if self.read_pos >= self.read_buf.len() {
+                self.read_buf.clear();
+                self.read_pos = 0;
+            } else if self.read_pos > 16384 {
+                self.read_buf.drain(..self.read_pos);
+                self.read_pos = 0;
+            }
+
             // Read 2-byte header
-            while self.read_buf.len() < 2 {
+            while self.read_buf.len() - self.read_pos < 2 {
                 let mut tmp = [0u8; 4096];
                 let n = self.stream.read(&mut tmp).await?;
                 if n == 0 {
@@ -308,8 +323,8 @@ impl RawWebSocket {
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
 
-            let b0 = self.read_buf[0];
-            let b1 = self.read_buf[1];
+            let b0 = self.read_buf[self.read_pos];
+            let b1 = self.read_buf[self.read_pos + 1];
             let opcode = b0 & 0x0F;
             let is_masked = (b1 & 0x80) != 0;
             let mut payload_len = (b1 & 0x7F) as usize;
@@ -325,7 +340,7 @@ impl RawWebSocket {
             }
 
             // Ensure full header is read
-            while self.read_buf.len() < header_size {
+            while self.read_buf.len() - self.read_pos < header_size {
                 let mut tmp = [0u8; 4096];
                 let n = self.stream.read(&mut tmp).await?;
                 if n == 0 {
@@ -334,13 +349,16 @@ impl RawWebSocket {
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
 
-            let mut offset = 2;
+            let mut offset = self.read_pos + 2;
             if payload_len == 126 {
-                payload_len = u16::from_be_bytes([self.read_buf[2], self.read_buf[3]]) as usize;
+                payload_len = u16::from_be_bytes([
+                    self.read_buf[self.read_pos + 2],
+                    self.read_buf[self.read_pos + 3],
+                ]) as usize;
                 offset += 2;
             } else if payload_len == 127 {
                 let mut len_bytes = [0u8; 8];
-                len_bytes.copy_from_slice(&self.read_buf[2..10]);
+                len_bytes.copy_from_slice(&self.read_buf[self.read_pos + 2..self.read_pos + 10]);
                 payload_len = u64::from_be_bytes(len_bytes) as usize;
                 offset += 8;
             }
@@ -359,7 +377,6 @@ impl RawWebSocket {
             let mask = if is_masked {
                 let mut m = [0u8; 4];
                 m.copy_from_slice(&self.read_buf[offset..offset + 4]);
-                let _ = offset;
                 Some(m)
             } else {
                 None
@@ -367,8 +384,8 @@ impl RawWebSocket {
 
             // Ensure complete payload is available
             let total_frame = header_size + payload_len;
-            while self.read_buf.len() < total_frame {
-                let needed = total_frame - self.read_buf.len();
+            while self.read_buf.len() - self.read_pos < total_frame {
+                let needed = total_frame - (self.read_buf.len() - self.read_pos);
                 let mut tmp = [0u8; 8192];
                 let to_read = needed.min(tmp.len());
                 let n = self.stream.read(&mut tmp[..to_read]).await?;
@@ -379,8 +396,10 @@ impl RawWebSocket {
             }
 
             // In-place unmask payload in read_buf without intermediate heap allocation
+            let payload_start = self.read_pos + header_size;
+            let payload_end = self.read_pos + total_frame;
             if let Some(m) = mask {
-                for (i, byte) in self.read_buf[header_size..total_frame]
+                for (i, byte) in self.read_buf[payload_start..payload_end]
                     .iter_mut()
                     .enumerate()
                 {
@@ -390,28 +409,39 @@ impl RawWebSocket {
 
             match opcode {
                 WS_OP_BINARY | WS_OP_CONT => {
-                    out_buf.extend_from_slice(&self.read_buf[header_size..total_frame]);
-                    self.read_buf.drain(..total_frame);
+                    out_buf.extend_from_slice(&self.read_buf[payload_start..payload_end]);
+                    self.read_pos += total_frame;
+                    if self.read_pos >= self.read_buf.len() {
+                        self.read_buf.clear();
+                        self.read_pos = 0;
+                    } else if self.read_pos > 16384 {
+                        self.read_buf.drain(..self.read_pos);
+                        self.read_pos = 0;
+                    }
                     if self.read_buf.is_empty() && self.read_buf.capacity() > 65536 {
                         self.read_buf.shrink_to(16384);
                     }
                     return Ok(payload_len);
                 }
                 WS_OP_PING => {
-                    let ping_payload = self.read_buf[header_size..total_frame].to_vec();
-                    self.read_buf.drain(..total_frame);
-                    if self.read_buf.is_empty() && self.read_buf.capacity() > 65536 {
-                        self.read_buf.shrink_to(16384);
+                    let ping_payload = self.read_buf[payload_start..payload_end].to_vec();
+                    self.read_pos += total_frame;
+                    if self.read_pos >= self.read_buf.len() {
+                        self.read_buf.clear();
+                        self.read_pos = 0;
+                    } else if self.read_pos > 16384 {
+                        self.read_buf.drain(..self.read_pos);
+                        self.read_pos = 0;
                     }
                     self.send_pong(&ping_payload).await?;
                     continue;
                 }
                 WS_OP_CLOSE => {
-                    self.read_buf.drain(..total_frame);
+                    self.read_pos += total_frame;
                     return Ok(0);
                 }
                 _ => {
-                    self.read_buf.drain(..total_frame);
+                    self.read_pos += total_frame;
                     continue;
                 }
             }
@@ -426,19 +456,10 @@ impl RawWebSocket {
     }
 
     async fn send_pong(&mut self, payload: &[u8]) -> io::Result<()> {
-        let mut header = [0u8; 10];
-        header[0] = 0x80 | WS_OP_PONG;
-        header[1] = 0x80 | (payload.len() as u8);
         let mut mask = [0u8; 4];
         rand::thread_rng().fill_bytes(&mut mask);
-        header[2..6].copy_from_slice(&mask);
-
-        self.stream.write_all(&header[..6]).await?;
-        let mut masked = payload.to_vec();
-        for (i, b) in masked.iter_mut().enumerate() {
-            *b ^= mask[i % 4];
-        }
-        self.stream.write_all(&masked).await?;
+        let frame = build_pong_frame(payload, mask);
+        self.stream.write_all(&frame).await?;
         self.stream.flush().await?;
         Ok(())
     }
@@ -450,6 +471,32 @@ impl RawWebSocket {
         let _ = self.stream.shutdown().await;
         Ok(())
     }
+}
+
+/// Builds an RFC 6455 PONG frame supporting extended payload length and 4-byte client masking.
+pub fn build_pong_frame(payload: &[u8], mask: [u8; 4]) -> Vec<u8> {
+    let len = payload.len();
+    let mut frame = Vec::with_capacity(14 + len);
+    frame.push(0x80 | WS_OP_PONG);
+
+    if len < 126 {
+        frame.push(0x80 | (len as u8));
+    } else if len <= 0xFFFF {
+        frame.push(0x80 | 126);
+        frame.extend_from_slice(&(len as u16).to_be_bytes());
+    } else {
+        frame.push(0x80 | 127);
+        frame.extend_from_slice(&(len as u64).to_be_bytes());
+    }
+
+    frame.extend_from_slice(&mask);
+    let mask_start = frame.len();
+    frame.extend_from_slice(payload);
+    for (i, b) in frame[mask_start..].iter_mut().enumerate() {
+        *b ^= mask[i % 4];
+    }
+
+    frame
 }
 
 #[cfg(test)]
@@ -482,5 +529,42 @@ mod tests {
         assert_eq!(MAX_WS_FRAME_PAYLOAD, 8 * 1024 * 1024);
         let oversized: usize = 16 * 1024 * 1024;
         assert!(oversized > MAX_WS_FRAME_PAYLOAD);
+    }
+
+    #[test]
+    fn test_build_pong_frame_extended_len() {
+        let payload = vec![0x42u8; 200];
+        let mask = [0x11, 0x22, 0x33, 0x44];
+        let frame = build_pong_frame(&payload, mask);
+
+        assert_eq!(frame[0], 0x80 | WS_OP_PONG);
+        assert_eq!(frame[1], 0x80 | 126);
+        let len = u16::from_be_bytes([frame[2], frame[3]]) as usize;
+        assert_eq!(len, 200);
+        assert_eq!(&frame[4..8], &mask);
+
+        // Unmask payload and verify round-trip
+        let mut unmasked = frame[8..].to_vec();
+        for (i, b) in unmasked.iter_mut().enumerate() {
+            *b ^= mask[i % 4];
+        }
+        assert_eq!(unmasked, payload);
+    }
+
+    #[test]
+    fn test_build_pong_frame_short() {
+        let payload = b"ping_test_payload";
+        let mask = [1, 2, 3, 4];
+        let frame = build_pong_frame(payload, mask);
+
+        assert_eq!(frame[0], 0x80 | WS_OP_PONG);
+        assert_eq!(frame[1], 0x80 | payload.len() as u8);
+        assert_eq!(&frame[2..6], &mask);
+
+        let mut unmasked = frame[6..].to_vec();
+        for (i, b) in unmasked.iter_mut().enumerate() {
+            *b ^= mask[i % 4];
+        }
+        assert_eq!(&unmasked[..], payload);
     }
 }

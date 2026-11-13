@@ -26,9 +26,26 @@ find_nfqws() {
     return 1
 }
 
+# Read and validate QNUM (1-65535, fallback 200)
+get_qnum() {
+    local q=$(uci -q get runet-fix.zapret.qnum)
+    case "$q" in
+        ''|*[!0-9]*)
+            [ -n "$q" ] && logger -t runet-fix "Invalid QNUM '$q', falling back to 200" 2>/dev/null
+            echo "200"
+            return
+            ;;
+    esac
+    if [ "$q" -ge 1 ] && [ "$q" -le 65535 ]; then
+        echo "$q"
+    else
+        logger -t runet-fix "QNUM '$q' out of range (1-65535), falling back to 200" 2>/dev/null
+        echo "200"
+    fi
+}
+
 kill_stray_nfqws() {
-    local qnum=$(uci -q get runet-fix.zapret.qnum)
-    [ -z "$qnum" ] && qnum="200"
+    local qnum=$(get_qnum)
 
     local pid cmdline
     for pid in $(pidof nfqws nfqws2 2>/dev/null); do
@@ -174,22 +191,69 @@ start_service() {
         local nfq_bin=$(find_nfqws)
         if [ -n "$nfq_bin" ]; then
             local preset=$(uci -q get runet-fix.zapret.preset || echo "flowseal_general")
-            local qnum=$(uci -q get runet-fix.zapret.qnum || echo "200")
+            local qnum=$(get_qnum)
             local custom_args=$(uci -q get runet-fix.zapret.custom_args || echo "")
             local mode=$(uci -q get runet-fix.zapret.mode || echo "all")
-            local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
-            local desync_opts=$(get_zapret_args "$preset" "$custom_args")
+            local autohost_legacy=$(uci -q get runet-fix.zapret.autohostlist || echo "0")
+            if [ "$mode" = "list" ] && [ "$autohost_legacy" = "1" ]; then
+                mode="list_auto"
+            fi
 
             local hostlist="/usr/share/runet-fix/lists/zapret-hosts.txt"
+            local autohost="/usr/share/runet-fix/lists/zapret-hosts-auto.txt"
             local excludelist="/usr/share/runet-fix/lists/zapret-exclude.txt"
+            local ru_exclude="/usr/share/runet-fix/lists/zapret-exclude-ru.txt"
             local bin_dir="/usr/share/runet-fix/bin"
+            local desync_opts=$(get_zapret_args "$preset" "$custom_args")
+
+            # Prepare exclusion arguments (applies to all relevant profiles)
+            local exclude_opts=""
+            if [ -s "$excludelist" ]; then
+                exclude_opts="$exclude_opts --hostlist-exclude=$excludelist"
+            fi
+            local exclude_ru=$(uci -q get runet-fix.zapret.exclude_ru)
+            [ -z "$exclude_ru" ] && exclude_ru="1"
+            if [ "$exclude_ru" = "1" ]; then
+                printf "ru\nxn--p1ai\nsu\n" > "$ru_exclude" 2>/dev/null || true
+                exclude_opts="$exclude_opts --hostlist-exclude=$ru_exclude"
+            else
+                rm -f "$ru_exclude" 2>/dev/null || true
+            fi
+
+            # Build hostlist options based on mode: all, list, or list_auto
+            local hostlist_opts=""
+            case "$mode" in
+                list)
+                    if [ -s "$hostlist" ]; then
+                        hostlist_opts="--hostlist=$hostlist"
+                    else
+                        logger -t runet-fix "Zapret list mode active but hostlist is empty! ($hostlist)" 2>/dev/null
+                        echo "[runet-fix] Warning: Zapret mode 'list' selected but zapret-hosts.txt is empty" >&2
+                    fi
+                    ;;
+                list_auto)
+                    mkdir -p /usr/share/runet-fix/lists 2>/dev/null || true
+                    touch "$autohost" 2>/dev/null || true
+                    if [ -s "$hostlist" ]; then
+                        hostlist_opts="--hostlist=$hostlist --hostlist-auto=$autohost --hostlist-auto-fail-threshold=3 --hostlist-auto-fail-time=60"
+                    else
+                        hostlist_opts="--hostlist-auto=$autohost --hostlist-auto-fail-threshold=3 --hostlist-auto-fail-time=60"
+                    fi
+                    ;;
+                all|*)
+                    hostlist_opts=""
+                    ;;
+            esac
 
             local args=""
             if [ "$preset" = "custom" ] && echo "$custom_args" | grep -q -- "--qnum"; then
                 args="$custom_args"
             else
                 # 1. QUIC UDP profile (UDP 443)
-                local quic_opts="--filter-udp=443 --dpi-desync=fake --dpi-desync-repeats=11"
+                local quic_opts="--filter-udp=443"
+                [ -n "$hostlist_opts" ] && quic_opts="$quic_opts $hostlist_opts"
+                [ -n "$exclude_opts" ] && quic_opts="$quic_opts $exclude_opts"
+                quic_opts="$quic_opts --dpi-desync=fake --dpi-desync-repeats=11"
                 if [ -f "$bin_dir/quic_initial_www_google_com.bin" ]; then
                     quic_opts="$quic_opts --dpi-desync-fake-quic=$bin_dir/quic_initial_www_google_com.bin"
                 fi
@@ -206,7 +270,9 @@ start_service() {
                 # 3. Discord Media TCP profile (ports 2053, 2083, 2087, 2096, 8443)
                 local media_opts=""
                 if [ "$discord_fix" = "1" ]; then
-                    media_opts="--new --filter-tcp=2053,2083,2087,2096,8443 --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
+                    media_opts="--new --filter-tcp=2053,2083,2087,2096,8443"
+                    [ -n "$exclude_opts" ] && media_opts="$media_opts $exclude_opts"
+                    media_opts="$media_opts --dpi-desync=fake,multisplit --dpi-desync-split-seqovl=681 --dpi-desync-split-pos=1 --dpi-desync-fooling=ts --dpi-desync-repeats=8"
                     if [ -f "$bin_dir/tls_clienthello_www_google_com.bin" ]; then
                         media_opts="$media_opts --dpi-desync-split-seqovl-pattern=$bin_dir/tls_clienthello_www_google_com.bin --dpi-desync-fake-tls=$bin_dir/tls_clienthello_www_google_com.bin"
                     fi
@@ -223,28 +289,10 @@ start_service() {
                 fi
 
                 # 5. Main Web TCP profile (ports 80, 443)
-                local main_tcp="--new --filter-tcp=80,443 $desync_opts"
-                if [ "$mode" = "list" ] && [ -s "$hostlist" ]; then
-                    main_tcp="$main_tcp --hostlist=$hostlist"
-                    local autohost_enabled=$(uci -q get runet-fix.zapret.autohostlist || echo "1")
-                    if [ "$autohost_enabled" = "1" ]; then
-                        local autohost="/tmp/runet-fix-hosts-auto.txt"
-                        mkdir -p /tmp/runet-fix 2>/dev/null || true
-                        touch "$autohost" 2>/dev/null || true
-                        main_tcp="$main_tcp --hostlist-auto=$autohost --hostlist-auto-fail-threshold=3 --hostlist-auto-fail-time=60"
-                    fi
-                fi
-                if [ -s "$excludelist" ]; then
-                    main_tcp="$main_tcp --hostlist-exclude=$excludelist"
-                fi
-                local exclude_ru=$(uci -q get runet-fix.zapret.exclude_ru || echo "1")
-                if [ "$exclude_ru" = "1" ]; then
-                    local ru_exclude="/usr/share/runet-fix/lists/zapret-ru-zones.txt"
-                    if [ ! -s "$ru_exclude" ]; then
-                        printf "ru\nxn--p1ai\nsu\n" > "$ru_exclude" 2>/dev/null || true
-                    fi
-                    main_tcp="$main_tcp --hostlist-exclude=$ru_exclude"
-                fi
+                local main_tcp="--new --filter-tcp=80,443"
+                [ -n "$hostlist_opts" ] && main_tcp="$main_tcp $hostlist_opts"
+                [ -n "$exclude_opts" ] && main_tcp="$main_tcp $exclude_opts"
+                [ -n "$desync_opts" ] && main_tcp="$main_tcp $desync_opts"
 
                 args="--qnum=$qnum $quic_opts"
                 [ -n "$voice_opts" ] && args="$args $voice_opts"
@@ -273,8 +321,17 @@ start_service() {
     [ -z "$tg_enabled" ] && tg_enabled="1" 
     if [ "$tg_enabled" = "1" ]; then
         local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
+        local tg_listen=$(uci -q get runet-fix.telegram.listen || echo "0.0.0.0")
+        [ -z "$tg_listen" ] && tg_listen="0.0.0.0"
         local tg_engine=$(uci -q get runet-fix.telegram.engine || echo "auto")
         local tg_secret=$(uci -q get runet-fix.telegram.secret || echo "")
+        if [ -z "$tg_secret" ]; then
+            tg_secret=$(hexdump -vn 16 -e '16/1 "%02x"' /dev/urandom 2>/dev/null || od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')
+            if [ -n "$tg_secret" ] && [ ${#tg_secret} -eq 32 ]; then
+                uci set runet-fix.telegram.secret="$tg_secret"
+                uci commit runet-fix
+            fi
+        fi
         local tg_pool_size=$(uci -q get runet-fix.telegram.pool_size)
         [ -z "$tg_pool_size" ] && tg_pool_size="2"
         local custom_domains=$(uci -q get runet-fix.telegram.custom_domains || echo "")
@@ -297,13 +354,13 @@ start_service() {
         procd_open_instance "telegram"
         if [ "$engine_type" = "rust" ]; then
             echo "[runet-fix] Launching native Rust Telegram WebSocket proxy on port $tg_port..."
-            procd_set_param command "$TG_RUST_BIN" -p "$tg_port" -l "0.0.0.0" --pool-size "$tg_pool_size"
+            procd_set_param command "$TG_RUST_BIN" -p "$tg_port" -l "$tg_listen" --pool-size "$tg_pool_size"
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
             [ -n "$custom_domains" ] && procd_append_param command --domains "$custom_domains"
             [ -n "$custom_workers" ] && procd_append_param command --workers "$custom_workers"
         else
             echo "[runet-fix] Launching Python Telegram WebSocket proxy on port $tg_port..."
-            procd_set_param command python3 -u "$TG_PY_SCRIPT" -p "$tg_port" --pool-size "$tg_pool_size"
+            procd_set_param command python3 -u "$TG_PY_SCRIPT" -p "$tg_port" -l "$tg_listen" --pool-size "$tg_pool_size"
             [ -n "$tg_secret" ] && procd_append_param command -s "$tg_secret"
             [ -n "$custom_domains" ] && procd_append_param command -d "$custom_domains"
             [ -n "$custom_workers" ] && procd_append_param command -w "$custom_workers"
@@ -326,21 +383,54 @@ start_service() {
     if [ "$cdir" != "/tmp/dnsmasq.d" ]; then
         uci set dhcp.@dnsmasq[0].confdir='/tmp/dnsmasq.d'
         uci commit dhcp
-        /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+        if dnsmasq --test >/dev/null 2>&1; then
+            /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+        else
+            logger -t runet-fix "dnsmasq config test failed on confdir update; restart aborted" 2>/dev/null || true
+        fi
     fi
 
-    # Always ensure ECH Type 65 filtering and DoH canary blocking
+    # Check dnsmasq support for filter-rr=65 before writing it
+    local has_filter_rr=0
+    local test_conf="/tmp/dnsmasq-test-filter-rr.conf"
+    echo "filter-rr=65" > "$test_conf"
+    if dnsmasq --test -C "$test_conf" >/dev/null 2>&1; then
+        has_filter_rr=1
+    else
+        logger -t runet-fix "dnsmasq does not support filter-rr=65; omitting option" 2>/dev/null || true
+    fi
+    rm -f "$test_conf"
+
     local filter_aaaa=$(uci -q get runet-fix.main.filter_aaaa || echo "0")
-    cat << 'EOF' > /tmp/dnsmasq.d/runet-fix-filter.conf
-# Strip Type 65 (HTTPS RR) so browsers fallback from ECH/HTTP3 to standard TLS ClientHello
-filter-rr=65
+    local tmp_filter="/tmp/dnsmasq.d/runet-fix-filter.conf.tmp"
+    cat << 'EOF' > "$tmp_filter"
 # Signal browsers (Firefox, Chrome) to disable DoH and use local DNS
 server=/use-application-dns.net/
 EOF
-    if [ "$filter_aaaa" = "1" ]; then
-        echo "filter-aaaa" >> /tmp/dnsmasq.d/runet-fix-filter.conf
+    if [ "$has_filter_rr" = "1" ]; then
+        echo "# Strip Type 65 (HTTPS RR) so browsers fallback from ECH/HTTP3 to standard TLS ClientHello" >> "$tmp_filter"
+        echo "filter-rr=65" >> "$tmp_filter"
     fi
-    chmod 644 /tmp/dnsmasq.d/runet-fix-*.conf 2>/dev/null || true
+    if [ "$filter_aaaa" = "1" ]; then
+        if echo "filter-AAAA" > "$test_conf" && dnsmasq --test -C "$test_conf" >/dev/null 2>&1; then
+            echo "filter-AAAA" >> "$tmp_filter"
+        elif echo "filter-aaaa" > "$test_conf" && dnsmasq --test -C "$test_conf" >/dev/null 2>&1; then
+            echo "filter-aaaa" >> "$tmp_filter"
+        elif echo "filter-rr=28" > "$test_conf" && dnsmasq --test -C "$test_conf" >/dev/null 2>&1; then
+            echo "filter-rr=28" >> "$tmp_filter"
+        fi
+        rm -f "$test_conf"
+    fi
+
+    # Only activate if dnsmasq accepts candidate configuration
+    if dnsmasq --test -C "$tmp_filter" >/dev/null 2>&1; then
+        mv "$tmp_filter" /tmp/dnsmasq.d/runet-fix-filter.conf
+        chmod 644 /tmp/dnsmasq.d/runet-fix-filter.conf
+        /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+    else
+        rm -f "$tmp_filter"
+        logger -t runet-fix "dnsmasq rejected runet-fix-filter.conf; keeping previous configuration" 2>/dev/null || true
+    fi
 
     local adb_enabled=$(uci -q get runet-fix.adblock.enabled)
     [ -z "$adb_enabled" ] && adb_enabled="1" 
@@ -350,15 +440,21 @@ EOF
             "$ADBLOCK_SCRIPT" >/dev/null 2>&1 &
         else
             [ -f "/tmp/runet-fix-adblock.count" ] || wc -l < /tmp/dnsmasq.d/runet-fix-adblock.conf > /tmp/runet-fix-adblock.count
-            /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+            if dnsmasq --test >/dev/null 2>&1; then
+                /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+            fi
         fi
     else
         echo "[runet-fix] Adblock is disabled in config, removing adblock rules..."
         if [ -f "/tmp/dnsmasq.d/runet-fix-adblock.conf" ]; then
             rm -f /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
-            /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+            if dnsmasq --test >/dev/null 2>&1; then
+                /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+            fi
         else
-            /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+            if dnsmasq --test >/dev/null 2>&1; then
+                /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+            fi
         fi
     fi
 }
@@ -370,7 +466,9 @@ stop_service() {
         "$FIREWALL_SCRIPT" stop
     fi
     rm -f /tmp/dnsmasq.d/runet-fix-filter.conf /tmp/dnsmasq.d/runet-fix-adblock.conf /tmp/runet-fix-adblock.count
-    /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+    if dnsmasq --test >/dev/null 2>&1; then
+        /etc/init.d/dnsmasq reload >/dev/null 2>&1 || true
+    fi
 }
 
 service_triggers() {
@@ -382,11 +480,23 @@ update_adblock() {
     "$ADBLOCK_SCRIPT"
 }
 
+extra_command "zapret_args" "Output nfqws arguments for given preset"
+zapret_args() {
+    get_zapret_args "$@"
+}
+
 extra_command "status_all" "Display full status of Zapret, Telegram Proxy, and Adblock"
 status_all() {
-    local ver="1.5.2"
-    [ -f /usr/share/runet-fix/version ] && ver=$(cat /usr/share/runet-fix/version | tr -d '\r\n ')
+    local ver="unknown"
+    [ -f /usr/share/runet-fix/version ] && ver=$(tr -d '\r\n ' < /usr/share/runet-fix/version)
     echo "=== [runet-fix v$ver] All-in-One Status ==="
+
+    local qnum=$(get_qnum)
+    local q_status="inactive"
+    if grep -qw "$qnum" /proc/net/netfilter/nfnetlink_queue 2>/dev/null; then
+        q_status="active"
+    fi
+    echo "Zapret QNUM: $qnum (queue $q_status)"
 
     local nfq_running=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['zapret'].running" 2>/dev/null)
     local nfq_pid=$(ubus call service list '{"name":"runet-fix"}' 2>/dev/null | jsonfilter -l 1 -e "@['runet-fix'].instances['zapret'].pid" 2>/dev/null)

@@ -2,26 +2,31 @@
 	"luci-app-runet-fix": {
 		"description": "Grant access to runet-fix configuration and management",
 		"read": {
-			"uci": [ "runet-fix" ],
+			"uci": [ "runet-fix", "dhcp" ],
 			"file": {
 				"/usr/share/runet-fix/lists/*": [ "read" ],
 				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "read" ],
+				"/usr/share/runet-fix/lists/zapret-hosts-auto.txt": [ "read" ],
 				"/usr/share/runet-fix/lists/zapret-exclude.txt": [ "read" ],
 				"/usr/share/runet-fix/version": [ "read" ],
-				"/tmp/runet-fix-adblock.count": [ "read" ],
+				"/tmp/runet-fix-adblock.count": [ "read", "stat" ],
+				"/tmp/runet-fix-hosts.count": [ "read", "stat" ],
 				"/tmp/runet-fix-test.json": [ "read", "stat" ],
 				"/tmp/runet-fix-update.json": [ "read", "stat" ],
 				"/tmp/tg-ws-proxy-stats.json": [ "read", "stat" ],
 				"/tmp/dnsmasq.d/runet-fix-adblock.conf": [ "read", "stat" ],
+				"/tmp/dhcp.leases": [ "read" ],
 				"/usr/bin/runet-fix": [ "exec" ],
 				"/usr/share/runet-fix/scripts/*": [ "exec" ],
 				"/sbin/logread": [ "exec" ]
 			},
 			"ubus": {
 				"service": [ "list" ],
-				"file": [ "exec", "read", "stat" ]
+				"file": [ "exec", "read", "stat" ],
+				"luci-rpc": [ "getDHCPLeases", "getHostHints" ],
+				"luci": [ "getDHCPLeases", "getHostHints" ]
 			}
 		},
 		"write": {
@@ -31,6 +36,7 @@
 				"/usr/share/runet-fix/lists/adblock-whitelist.txt": [ "write" ],
 				"/usr/share/runet-fix/lists/adblock-blacklist.txt": [ "write" ],
 				"/usr/share/runet-fix/lists/zapret-hosts.txt": [ "write" ],
+				"/usr/share/runet-fix/lists/zapret-hosts-auto.txt": [ "write" ],
 				"/usr/share/runet-fix/lists/zapret-exclude.txt": [ "write" ],
 				"/usr/bin/runet-fix": [ "exec" ]
 			},

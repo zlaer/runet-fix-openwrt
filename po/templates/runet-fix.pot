@@ -1,0 +1,577 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: runet-fix 1.5.2\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-13 00:00+0300\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "(0 extra daemons, RAM optimized)"
+msgstr ""
+
+msgid "(Blocking active)"
+msgstr ""
+
+msgid "(Tunnel :1443 active)"
+msgstr ""
+
+msgid "(Zero-config for whole LAN)"
+msgstr ""
+
+msgid "-- Select device from DHCP leases --"
+msgstr ""
+
+msgid "1. Register at <a href=\"https://dash.cloudflare.com\" target=\"_blank\" style=\"color:#38bdf8;text-decoration:underline;\">dash.cloudflare.com</a> and go to <b>Workers & Pages</b> → <b>Create application</b>.<br>2. Click <b>Create Worker</b> → <b>Deploy</b> → then <b>Edit code</b>.<br>3. Paste the websocket bridge script and click <b>Deploy</b>.<br>4. Copy your assigned <code>*.workers.dev</code> address and paste it into the field above."
+msgstr ""
+
+msgid "ACTIVE"
+msgstr ""
+
+msgid "Active DPI Bypass Preset"
+msgstr ""
+
+msgid "Active Status"
+msgstr ""
+
+msgid "Adblock"
+msgstr ""
+
+msgid "Adblock Configuration"
+msgstr ""
+
+msgid "Add Connected Device"
+msgstr ""
+
+msgid "Add to Exclusions"
+msgstr ""
+
+msgid "Additional domains or tracking hosts to block. One domain per line."
+msgstr ""
+
+msgid "Address of your free Cloudflare Worker (e.g. my-tg.username.workers.dev). Router tunnels Telegram traffic for all home devices through this relay, bypassing ISP blocks. Multiple can be comma-separated."
+msgstr ""
+
+msgid "Adds specialized filters for blocking Russian ads, trackers, counters, and web players."
+msgstr ""
+
+msgid "Aggressive (Standard + Anti-Coinminer protection)"
+msgstr ""
+
+msgid "All Outgoing Traffic (Recommended for full coverage)"
+msgstr ""
+
+msgid "All devices on your network (iPhone, Android, Windows, Mac, Smart TV) connect to Telegram automatically.<br>You <b>do not</b> need to configure proxy settings in Telegram apps on any device."
+msgstr ""
+
+msgid "Applies domain-level blocking via dnsmasq address configuration."
+msgstr ""
+
+msgid "Auto-Discovered Domains (Auto-Hostlist)"
+msgstr ""
+
+msgid "Auto-Update Blocked Hostlist"
+msgstr ""
+
+msgid "Auto-list cleared successfully!"
+msgstr ""
+
+msgid "Automatic List Update (Cron)"
+msgstr ""
+
+msgid "Automatically downloads updated filter rules in background."
+msgstr ""
+
+msgid "Automatically intercepts and tunnels Telegram traffic at the router level. No proxy configuration is required on phones, PCs, or Smart TVs — Telegram works out-of-the-box for all LAN devices."
+msgstr ""
+
+msgid "Autotune error: "
+msgstr ""
+
+msgid "Autotune result: "
+msgstr ""
+
+msgid "Available"
+msgstr ""
+
+msgid "Benchmarking desync strategies (Flowseal General, YouTube 4K, ALT, FAKE TLS)... Please wait."
+msgstr ""
+
+msgid "Blacklist (Always Block)"
+msgstr ""
+
+msgid "Blocked"
+msgstr ""
+
+msgid "Check connectivity status to YouTube, Discord, and Telegram WebSocket relays, and view live system logs."
+msgstr ""
+
+msgid "Check for Updates"
+msgstr ""
+
+msgid "Checking GitHub..."
+msgstr ""
+
+msgid "Clear Auto-List"
+msgstr ""
+
+msgid "Cloudflare Worker (Relay Address)"
+msgstr ""
+
+msgid "Cloudflare Worker Setup (Advanced)"
+msgstr ""
+
+msgid "Completely Uninstall Runet-Fix"
+msgstr ""
+
+msgid "Completely remove the Runet-Fix suite, stop all daemons, delete nftables firewall rules, clean cron schedule and LuCI web views."
+msgstr ""
+
+msgid "Configures nfqws packet desynchronization for unthrottling YouTube 4K, Discord voice & media, and ISP-blocked sites."
+msgstr ""
+
+msgid "Connect in Telegram"
+msgstr ""
+
+msgid "Connected"
+msgstr ""
+
+msgid "Connectivity Test"
+msgstr ""
+
+msgid "Copy"
+msgstr ""
+
+msgid "Custom Arguments (Enter below)"
+msgstr ""
+
+msgid "Custom Cloudflare Relay Domains (CfProxy)"
+msgstr ""
+
+msgid "Custom Whitelist & Blacklist"
+msgstr ""
+
+msgid "Custom domains pointed to Cloudflare (kws1..kws5). Leave empty if using Worker."
+msgstr ""
+
+msgid "Custom nfqws Arguments"
+msgstr ""
+
+msgid "Custom user exclusion list of domains that should NOT be desynchronized. All subdomains are automatically excluded. One domain per line."
+msgstr ""
+
+msgid "DNS & Adblock"
+msgstr ""
+
+msgid "DNS Error"
+msgstr ""
+
+msgid "DNS OK"
+msgstr ""
+
+msgid "Daily"
+msgstr ""
+
+msgid "Daily (Every night at 04:00)"
+msgstr ""
+
+msgid "Desynchronizes UDP ports 27015-27050 and 7777-7780 (Steam, CS2, Dota 2, GTA Online) with game binary patterns to eliminate TSPU packet drops."
+msgstr ""
+
+msgid "Device Bypass (LAN Exclusion)"
+msgstr ""
+
+msgid "Device added to exclusions: "
+msgstr ""
+
+msgid "Diagnostics & Logs"
+msgstr ""
+
+msgid "Directs selected outgoing TCP/UDP traffic to Netfilter queue for desynchronization."
+msgstr ""
+
+msgid "Disabled"
+msgstr ""
+
+msgid "Disabled (Manual update only)"
+msgstr ""
+
+msgid "Discord Gateway"
+msgstr ""
+
+msgid "Domains that are desynchronized in \"Target Hostlist Only\" and \"Target Hostlist + Auto-Detect\" modes. One domain per line."
+msgstr ""
+
+msgid "Domains that were dynamically identified by nfqws as blocked and added to DPI bypass (persists across reboots)."
+msgstr ""
+
+msgid "Domains to exclude from adblocking. One domain per line."
+msgstr ""
+
+msgid "Download latest blocked domains and merge with your custom hostlist."
+msgstr ""
+
+msgid "Downloading latest release from GitHub, updating files and restarting services..."
+msgstr ""
+
+msgid "Enable Adblock"
+msgstr ""
+
+msgid "Enable All Services"
+msgstr ""
+
+msgid "Enable Telegram Transparent Gateway"
+msgstr ""
+
+msgid "Enable Zapret DPI Engine"
+msgstr ""
+
+msgid "Error Running Test"
+msgstr ""
+
+msgid "Error clearing auto-list: "
+msgstr ""
+
+msgid "Error updating hostlist: "
+msgstr ""
+
+msgid "Exclude RU zone (.ru, .рф, .su)"
+msgstr ""
+
+msgid "Excluded IP Addresses"
+msgstr ""
+
+msgid "Excluded MAC Addresses"
+msgstr ""
+
+msgid "Excludes .ru, .рф, .su domain suffixes across all desync profiles without downloading large lists."
+msgstr ""
+
+msgid "Exclusion List (Custom Blacklist)"
+msgstr ""
+
+msgid "Fastest preset activated: "
+msgstr ""
+
+msgid "Filter IPv6 AAAA Queries (filter-aaaa)"
+msgstr ""
+
+msgid "Filter Profile"
+msgstr ""
+
+msgid "Filters out AAAA (IPv6) DNS responses, forcing all LAN devices over IPv4 through Zapret and proxy tunnels without leaks."
+msgstr ""
+
+msgid "Globally enables or disables all Runet-Fix subsystems."
+msgstr ""
+
+msgid "How to get a free Cloudflare Worker address (2 minutes):"
+msgstr ""
+
+msgid "INACTIVE"
+msgstr ""
+
+msgid "IPv4 address (e.g. 192.168.1.150). One per item."
+msgstr ""
+
+msgid "Instant verification (1–2 sec): YouTube 4K, Discord Gateway, Telegram tunnel, and adblock status."
+msgstr ""
+
+msgid "Intercept Discord Voice UDP Ports"
+msgstr ""
+
+msgid "Internal Service Port"
+msgstr ""
+
+msgid "Kernel queue index used for packet exchange between firewall and nfqws."
+msgstr ""
+
+msgid "Latest version installed"
+msgstr ""
+
+msgid "Local LAN devices (work VPN laptops, Smart TVs, consoles) whose traffic should bypass Zapret and Telegram proxies entirely."
+msgstr ""
+
+msgid "Local router port where transparent traffic is handled (default: 1443)."
+msgstr ""
+
+msgid "MAC address (e.g. AA:BB:CC:DD:EE:FF). One per item."
+msgstr ""
+
+msgid "MTProxy Secret"
+msgstr ""
+
+msgid "Master Switch & System Overview"
+msgstr ""
+
+msgid "Micro (<2 MB RAM - curated RU AdList ~15k domains, for 64MB RAM routers)"
+msgstr ""
+
+msgid "Netfilter Queue Number (QNUM)"
+msgstr ""
+
+msgid "No active blocking rules loaded."
+msgstr ""
+
+msgid "Not checked"
+msgstr ""
+
+msgid "Online Games UDP Acceleration (Game UDP Fix)"
+msgstr ""
+
+msgid "Optional: Manual MTProxy Connection"
+msgstr ""
+
+msgid "Overview"
+msgstr ""
+
+msgid "Periodically fetch the latest curated AntiFilter Community blocked domains list."
+msgstr ""
+
+msgid "Queues UDP ports 50000-50100 and 19294-19344 with fake STUN packets to restore Discord voice channels."
+msgstr ""
+
+msgid "Quick Actions"
+msgstr ""
+
+msgid "RPC Error: "
+msgstr ""
+
+msgid "RU AdList Subscription (Yandex.Direct, VK/Mail.ru trackers, video players)"
+msgstr ""
+
+msgid "RUNNING"
+msgstr ""
+
+msgid "Real-Time Network Health Probe"
+msgstr ""
+
+msgid "Recent System Logs"
+msgstr ""
+
+msgid "Refresh Logs"
+msgstr ""
+
+msgid "Refresh Status"
+msgstr ""
+
+msgid "Rerun Test"
+msgstr ""
+
+msgid "Response error"
+msgstr ""
+
+msgid "Restart Services"
+msgstr ""
+
+msgid "Router firewall intercepts outgoing Telegram DC traffic and tunnels it around ISP throttling."
+msgstr ""
+
+msgid "Run Zapret Autotune?\n"
+"\n"
+"Key strategies will be benchmarked against YouTube and Discord (~10-15s). The fastest working preset will be activated automatically."
+msgstr ""
+
+msgid "Runet Fix"
+msgstr ""
+
+msgid "Runet Fix - All-in-One Dashboard"
+msgstr ""
+
+msgid "Runet Fix - Diagnostics & System Logs"
+msgstr ""
+
+msgid "Runet-Fix Version"
+msgstr ""
+
+msgid "Runet-Fix has been removed. Redirecting..."
+msgstr ""
+
+msgid "Running Tests..."
+msgstr ""
+
+msgid "STOPPED"
+msgstr ""
+
+msgid "Select a desync strategy profile to bypass TSPU/DPI blocking for YouTube 4K, Discord, and other resources."
+msgstr ""
+
+msgid "Select an active device from your network to add to the exclusion list."
+msgstr ""
+
+msgid "Select filter intensity. Standard profile includes StevenBlack Unified and Russian filters."
+msgstr ""
+
+msgid "Select filtering mode: all traffic, target hostlist only, or target hostlist with auto-detection."
+msgstr ""
+
+msgid "Service Availability Diagnostics (RuNet Health Probe)"
+msgstr ""
+
+msgid "Smart Adblock (dnsmasq integration)"
+msgstr ""
+
+msgid "Standard (StevenBlack + RU AdList ~76k domains)"
+msgstr ""
+
+msgid "Subsystem Status"
+msgstr ""
+
+msgid "Success!"
+msgstr ""
+
+msgid "Target Hostlist + Auto-Detect (Learns blocked domains automatically)"
+msgstr ""
+
+msgid "Target Hostlist Only (Conserves router CPU)"
+msgstr ""
+
+msgid "Telegram Bypass"
+msgstr ""
+
+msgid "Telegram Transparent Gateway (Zero Client Configuration)"
+msgstr ""
+
+msgid "Telegram Transparent Proxy"
+msgstr ""
+
+msgid "Telegram WebSocket"
+msgstr ""
+
+msgid "Test Services (1 sec)"
+msgstr ""
+
+msgid "Testing..."
+msgstr ""
+
+msgid "Traffic Interception Scope"
+msgstr ""
+
+msgid "Transparent Gateway Parameters"
+msgstr ""
+
+msgid "Ultra-lightweight DNS-level ad and tracking blocker. Loads high-quality filter lists directly into OpenWrt dnsmasq with zero background memory overhead."
+msgstr ""
+
+msgid "Unavailable"
+msgstr ""
+
+msgid "Unified high-performance suite for OpenWrt: Zapret DPI bypass, Transparent Telegram WebSocket tunnel, and Smart Adblock."
+msgstr ""
+
+msgid "Uninstall Runet-Fix"
+msgstr ""
+
+msgid "Uninstall cancelled: confirmation mismatch"
+msgstr ""
+
+msgid "Uninstalling Runet-Fix from router..."
+msgstr ""
+
+msgid "Update"
+msgstr ""
+
+msgid "Update Adblock Now"
+msgstr ""
+
+msgid "Update Runet-Fix from GitHub to the latest version?"
+msgstr ""
+
+msgid "Update Runet-Fix to version v"
+msgstr ""
+
+msgid "Update Zapret Hosts"
+msgstr ""
+
+msgid "Update available"
+msgstr ""
+
+msgid "Update error: "
+msgstr ""
+
+msgid "Update installed successfully! Reloading page..."
+msgstr ""
+
+msgid "Update list from AntiFilter Community"
+msgstr ""
+
+msgid "Update to"
+msgstr ""
+
+msgid "Updating Runet-Fix"
+msgstr ""
+
+msgid "Use only if connecting guest devices outside your home network:"
+msgstr ""
+
+msgid "Used only when Preset is set to \"Custom\". Example: --dpi-desync=fake,split2 --dpi-desync-split-pos=1"
+msgstr ""
+
+msgid "Warning! Are you sure you want to completely uninstall Runet-Fix from this router?\n"
+"\n"
+"All services will be stopped, nftables rules removed, cron jobs cleaned, and all scripts, lists, and LuCI web views deleted.\n"
+"Config backup will be saved in /etc/config/.\n"
+"\n"
+"Type UNINSTALL to confirm:"
+msgstr ""
+
+msgid "Weekly (Every Sunday at 04:00 - Recommended)"
+msgstr ""
+
+msgid "Weekly (Recommended)"
+msgstr ""
+
+msgid "Whitelist (Never Block)"
+msgstr ""
+
+msgid "Working..."
+msgstr ""
+
+msgid "YouTube 4K (DPI)"
+msgstr ""
+
+msgid "Zapret (DPI Circumvention)"
+msgstr ""
+
+msgid "Zapret (DPI)"
+msgstr ""
+
+msgid "Zapret (YouTube 4K & Discord DPI)"
+msgstr ""
+
+msgid "Zapret Autotune"
+msgstr ""
+
+msgid "Zapret Engine Settings"
+msgstr ""
+
+msgid "Zapret Target Hostlist"
+msgstr ""
+
+msgid "Zapret hostlist updated successfully!"
+msgstr ""
+
+msgid "Zero Client Configuration Mode:"
+msgstr ""
+
+msgid "act., total: "
+msgstr ""
+
+msgid "dnsmasq Smart Adblock"
+msgstr ""
+
+msgid "domains"
+msgstr ""
+
+msgid "hostlist: "
+msgstr ""
+
+msgid "sessions: "
+msgstr ""
+
+msgid "t.me Link"
+msgstr ""
+
+msgid "unique ad/tracking domains currently blocked in dnsmasq."
+msgstr ""
+

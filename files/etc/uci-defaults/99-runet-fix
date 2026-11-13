@@ -1,5 +1,65 @@
 #!/bin/sh
-# 99-runet-fix - First-boot / post-install configuration for OpenWrt
+# 99-runet-fix - First-boot / post-install configuration and migrations for OpenWrt
+
+CHANGED=0
+
+# Idempotent UCI config migrations
+if [ -f /etc/config/runet-fix ]; then
+    # Migrate legacy autohostlist=1 to mode=list_auto
+    LEGACY_AUTOHOST=$(uci -q get runet-fix.zapret.autohostlist)
+    if [ "$LEGACY_AUTOHOST" = "1" ]; then
+        CURRENT_MODE=$(uci -q get runet-fix.zapret.mode)
+        if [ -z "$CURRENT_MODE" ] || [ "$CURRENT_MODE" = "list" ]; then
+            uci set runet-fix.zapret.mode='list_auto'
+            CHANGED=1
+        fi
+        uci -q delete runet-fix.zapret.autohostlist
+        CHANGED=1
+    fi
+
+    # Ensure main options
+    [ -z "$(uci -q get runet-fix.main.enabled)" ] && uci set runet-fix.main.enabled='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.main.log_level)" ] && uci set runet-fix.main.log_level='info' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.main.filter_aaaa)" ] && uci set runet-fix.main.filter_aaaa='0' && CHANGED=1
+
+    # Ensure zapret options
+    [ -z "$(uci -q get runet-fix.zapret.enabled)" ] && uci set runet-fix.zapret.enabled='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.preset)" ] && uci set runet-fix.zapret.preset='youtube_4k' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.mode)" ] && uci set runet-fix.zapret.mode='all' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.discord_fix)" ] && uci set runet-fix.zapret.discord_fix='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.qnum)" ] && uci set runet-fix.zapret.qnum='200' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.exclude_ru)" ] && uci set runet-fix.zapret.exclude_ru='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.auto_update_hosts)" ] && uci set runet-fix.zapret.auto_update_hosts='weekly' && CHANGED=1
+
+    # Ensure telegram options
+    [ -z "$(uci -q get runet-fix.telegram.enabled)" ] && uci set runet-fix.telegram.enabled='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.telegram.mode)" ] && uci set runet-fix.telegram.mode='transparent' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.telegram.port)" ] && uci set runet-fix.telegram.port='1443' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.telegram.listen)" ] && uci set runet-fix.telegram.listen='0.0.0.0' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.telegram.engine)" ] && uci set runet-fix.telegram.engine='auto' && CHANGED=1
+
+    # Secret migration: replace empty or insecure static default with random 16-byte hex
+    CURRENT_SECRET=$(uci -q get runet-fix.telegram.secret)
+    KNOWN_DEFAULT="75febd06a20f38f1d1151919a0540b13"
+    if [ -z "$CURRENT_SECRET" ] || [ "$CURRENT_SECRET" = "$KNOWN_DEFAULT" ]; then
+        NEW_SECRET=$(hexdump -vn 16 -e '16/1 "%02x"' /dev/urandom 2>/dev/null || od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')
+        if [ -n "$NEW_SECRET" ] && [ ${#NEW_SECRET} -eq 32 ]; then
+            uci set runet-fix.telegram.secret="$NEW_SECRET"
+            CHANGED=1
+            logger -t runet-fix "Telegram secret was updated to unique random secret" 2>/dev/null || true
+        fi
+    fi
+
+    # Ensure adblock options
+    [ -z "$(uci -q get runet-fix.adblock.enabled)" ] && uci set runet-fix.adblock.enabled='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.adblock.profile)" ] && uci set runet-fix.adblock.profile='standard' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.adblock.enable_ru)" ] && uci set runet-fix.adblock.enable_ru='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.adblock.auto_update)" ] && uci set runet-fix.adblock.auto_update='weekly' && CHANGED=1
+
+    if [ "$CHANGED" = "1" ]; then
+        uci commit runet-fix
+    fi
+fi
 
 # Enable runet-fix service
 /etc/init.d/runet-fix enable
@@ -15,7 +75,11 @@ mkdir -p /usr/share/runet-fix/lists
 # Make scripts executable
 chmod +x /usr/bin/runet-fix
 chmod +x /usr/share/runet-fix/scripts/*.sh
-chmod +x /usr/share/runet-fix/scripts/*.py
+[ -f /usr/share/runet-fix/tg_ws_proxy/main.py ] && chmod +x /usr/share/runet-fix/tg_ws_proxy/main.py
 chmod +x /etc/init.d/runet-fix
+
+if [ "$CHANGED" = "1" ]; then
+    /etc/init.d/runet-fix restart 2>/dev/null || true
+fi
 
 exit 0

@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.5.2-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.6.0-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]
@@ -13,7 +13,7 @@
 
 1. **Zapret (nfqws / nfqws2)** — эффективный обход DPI-блокировок YouTube (4K/60fps), Discord (голосовые каналы WebRTC/STUN и медиапотоки) и заблокированных веб-сайтов. Включает полную библиотеку из 22 пресетов Flowseal (включая ALT, FAKE TLS и EXP) и 23 оригинальных бинарных шаблона легитимных российских сервисов (Сферум, 4PDA, Ozon, Mail.ru).
 2. **Transparent Telegram WebSocket Tunnel (tg-ws-proxy)** — высокопроизводительный нативный демон на **Rust** (потребление RAM всего **~1.7–2.7 МБ**, без зависимости от тяжелого Python 3). **Не требует ручной настройки прокси на устройствах**: трафик клиентов в домашней сети автоматически перехватывается роутером и направляется через Cloudflare WebSocket туннели на полной скорости провайдера.
-3. **Smart Adblock** — фильтрация рекламы, счетчиков и трекеров Рунета (OISD, AdGuard RU), встроенная напрямую в штатный `dnsmasq` роутера. Работает без запуска сторонних демонов.
+3. **Smart Adblock** — фильтрация рекламы, счетчиков и трекеров Рунета (StevenBlack, AdGuard RU, NoCoin), встроенная напрямую в штатный `dnsmasq` роутера. Работает без запуска сторонних демонов.
 4. **Защита от ECH-блокировок и DoH-утечек** — автоматическая вырезка DNS-записей Type 65 (HTTPS RR) через `filter-rr=65` и блокировка канареечного домена DoH, что предотвращает блокировку браузерного Discord и современных сайтов со стороны ТСПУ.
 5. **Двуязычный интерфейс LuCI (RU / ENG)** — мониторинг статуса служб, замер задержек (RuNet Health Probe), переключение пресетов, редактирование списков, просмотр системных логов и **обновление пакета в 1 клик прямо из панели управления**.
 
@@ -172,6 +172,59 @@ runet-fix stop
 # Полностью удалить Runet-Fix с очисткой системы
 runet-fix uninstall
 ```
+
+---
+
+## Диагностика
+
+При возникновении проблем с подключением или обходом блокировок используйте следующие команды:
+
+```bash
+# 1. Экспресс-проверка доступности сервисов и прокси
+runet-fix test
+runet-fix test --json
+
+# 2. Детальный статус всех подсистем (Zapret, Telegram, Adblock, QNUM)
+runet-fix status
+runet-fix status --json
+
+# 3. Проверка правил файрвола (nftables / iptables)
+runet-fix firewall
+# Для подробного вывода правил в OpenWrt 22.03+ (fw4 / nftables):
+nft list table inet runet_fix
+# Для OpenWrt 21.02 (fw3 / iptables):
+iptables -t nat -S RUNET_TG
+iptables -t mangle -S RUNET_ZAPRET
+
+# 4. Проверка очереди Netfilter Queue (nfqws)
+cat /proc/net/netfilter/nfnetlink_queue
+
+# 5. Просмотр системных логов в реальном времени
+logread -f -e runet-fix -e tg-ws-proxy -e nfqws
+
+# 6. Авто-подбор рабочего пресета Zapret
+runet-fix autotune --apply
+```
+
+---
+
+## Обновление
+
+Обновление пакета можно выполнить как через веб-интерфейс LuCI (**Runet-Fix → Обзор → Проверить обновления / Обновить**), так и через CLI:
+
+```bash
+# Проверка наличия свежего релиза
+runet-fix check-update
+
+# Установка обновления
+runet-fix update
+```
+
+### Сохранение настроек и списков
+- Файл конфигурации `/etc/config/runet-fix` объявляется как `conffile` и **всегда сохраняется** при обновлении пакета.
+- Пользовательские списки (`adblock-whitelist.txt`, `adblock-blacklist.txt`, `zapret-hosts-user.txt`, `zapret-exclude.txt`) автоматически сохраняются и восстанавливаются.
+- При обновлении создается резервная копия `/tmp/runet-fix-backup.*`. В случае сбоя или обрыва сети установщик автоматически откатывает файлы к исходному состоянию.
+
 
 ---
 

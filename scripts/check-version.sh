@@ -33,16 +33,14 @@ expect "Makefile PKG_VERSION" \
     "$(sed -n 's/^PKG_VERSION:=\([0-9][0-9.]*\).*/\1/p' "$ROOT/Makefile")"
 expect "README.md release badge" \
     "$(grep -o 'Release-v[0-9][0-9.]*' "$ROOT/README.md" | sed 's/^Release-v//' || true)"
-expect "files/etc/init.d/runet-fix local ver" \
-    "$(sed -n 's/.*local ver="\([0-9][0-9.]*\)".*/\1/p' "$ROOT/files/etc/init.d/runet-fix")"
-expect "files/usr/bin/runet-fix CURRENT_VERSION" \
-    "$(sed -n 's/^CURRENT_VERSION="\([0-9][0-9.]*\)".*/\1/p' "$ROOT/files/usr/bin/runet-fix")"
 
-# overview.js has several fallbacks; every quoted semver must match.
-overview="$ROOT/files/www/luci-static/resources/view/runet-fix/overview.js"
-for found in $(grep -o "'[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*'" "$overview" | tr -d "'" || true); do
-    expect "overview.js fallback" "$found"
-done
+# Verify no hardcoded semver literals exist in files/ (P2.8 single source of truth)
+found_literals=$(grep -rnE "'[0-9]+\.[0-9]+\.[0-9]+'|\"[0-9]+\.[0-9]+\.[0-9]+\"" "$ROOT/files/etc" "$ROOT/files/usr/bin" "$ROOT/files/www" 2>/dev/null || true)
+if [ -n "$found_literals" ]; then
+    echo "check-version: found hardcoded semver literals in files/ (P2.8 violation):" >&2
+    echo "$found_literals" >&2
+    status=1
+fi
 
 if [ "$status" -ne 0 ]; then
     echo "check-version: run scripts/sync-version.sh to update derived copies" >&2
