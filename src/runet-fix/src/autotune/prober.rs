@@ -34,7 +34,7 @@ pub async fn probe_https(host: &str, port: u16, timeout_ms: u64) -> ProbeResult 
         let addrs = tokio::net::lookup_host(&addr).await?;
         let mut sorted_addrs: Vec<_> = addrs.collect();
         // Prioritize IPv4 addresses so unroutable IPv6 WAN routes don't delay or fail probes
-        sorted_addrs.sort_by_key(|a| if a.is_ipv4() { 0 } else { 1 });
+        sorted_addrs.sort_by_key(|a| !a.is_ipv4());
 
         let mut last_err = None;
         let mut stream_opt = None;

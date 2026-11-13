@@ -96,7 +96,7 @@ pub async fn run_ipc_server(_pool: Arc<WsConnectionPool>) {
 pub async fn run_ipc_server<T>(_pool: T) {}
 
 /// Client query to the daemon socket (returns response in milliseconds if daemon is active).
-pub fn query_daemon_socket(cmd: &str) -> Option<String> {
+pub fn query_daemon_socket(_cmd: &str) -> Option<String> {
     #[cfg(unix)]
     {
         use std::io::{BufRead, Write};
@@ -111,7 +111,7 @@ pub fn query_daemon_socket(cmd: &str) -> Option<String> {
             .set_write_timeout(Some(Duration::from_millis(500)))
             .ok()?;
 
-        stream.write_all(format!("{}\n", cmd).as_bytes()).ok()?;
+        stream.write_all(format!("{}\n", _cmd).as_bytes()).ok()?;
         stream.flush().ok()?;
 
         let mut reader = std::io::BufReader::new(stream);
@@ -121,6 +121,5 @@ pub fn query_daemon_socket(cmd: &str) -> Option<String> {
             return Some(resp.trim().to_string());
         }
     }
-    let _ = cmd;
     None
 }

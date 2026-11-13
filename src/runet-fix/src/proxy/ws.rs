@@ -117,7 +117,7 @@ impl RawWebSocket {
             let raw_addrs = tokio::net::lookup_host(&addr).await?;
             let mut addrs: Vec<_> = raw_addrs.collect();
             // Prioritize IPv4 for upstream WS connects to bypass broken IPv6 WAN routes
-            addrs.sort_by_key(|a| if a.is_ipv4() { 0 } else { 1 });
+            addrs.sort_by_key(|a| !a.is_ipv4());
             let mut last_err = None;
             let mut connected_stream = None;
 

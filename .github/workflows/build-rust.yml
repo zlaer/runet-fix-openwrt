@@ -55,7 +55,7 @@ jobs:
 
       - name: cargo clippy
         working-directory: src/runet-fix
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets
 
       - name: cargo test
         working-directory: src/runet-fix

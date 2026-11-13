@@ -243,6 +243,9 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     }
     fs::rename(&tmp_conf, CONF_FILE)?;
 
+    // Save count file for LuCI dashboard
+    let _ = fs::write(COUNT_FILE, format!("{}\n", total));
+
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -250,16 +253,14 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         let _ = fs::set_permissions(COUNT_FILE, fs::Permissions::from_mode(0o644));
     }
 
-    // Save count file for LuCI dashboard
-    let _ = fs::write(COUNT_FILE, format!("{}\n", total));
-
     // 7. Restart or notify dnsmasq
     println!("[runet-fix:adblock] Reloading dnsmasq configuration...");
-    if Command::new("/etc/init.d/dnsmasq")
+    let restarted = Command::new("/etc/init.d/dnsmasq")
         .arg("restart")
         .status()
-        .is_err()
-    {
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !restarted {
         let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
     }
 

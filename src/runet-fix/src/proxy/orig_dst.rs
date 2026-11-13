@@ -90,13 +90,11 @@ pub fn set_outbound_mark_fd(_fd: std::os::raw::c_int, _mark: u32) -> io::Result<
 }
 
 #[allow(dead_code)]
-pub fn set_outbound_mark(stream: &TcpStream, mark: u32) -> io::Result<()> {
+pub fn set_outbound_mark(_stream: &TcpStream, _mark: u32) -> io::Result<()> {
     #[cfg(target_os = "linux")]
     {
-        set_outbound_mark_fd(stream.as_raw_fd(), mark)?;
+        set_outbound_mark_fd(_stream.as_raw_fd(), _mark)?;
     }
-    let _ = mark;
-    let _ = stream;
     Ok(())
 }
 
