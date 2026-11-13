@@ -116,8 +116,17 @@ pub fn dc_from_ip(ip: Ipv4Addr) -> u8 {
                 3
             }
         }
-        (149, 154, 167) | (149, 154, 166) => 2,
+        // 149.154.167.0/24 is shared: .51 is DC2, the published DC4 address is .91.
+        (149, 154, 167) => {
+            if octets[3] == 91 {
+                4
+            } else {
+                2
+            }
+        }
+        (149, 154, 166) => 2,
         (149, 154, 165) | (149, 154, 164) => 4,
+        (149, 154, 171) => 5,
         (91, 108, 56) => 5,
         (91, 108, ..) => 5,
         _ => 2, // Safe default fallback: DC 2 (Amsterdam/Europe core)
@@ -144,6 +153,8 @@ mod tests {
     fn test_dc_from_ip() {
         assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 175, 50)), 1);
         assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 167, 51)), 2);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 167, 91)), 4);
+        assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 171, 5)), 5);
         assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 166, 1)), 2);
         assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 175, 100)), 3);
         assert_eq!(dc_from_ip(Ipv4Addr::new(149, 154, 165, 10)), 4);

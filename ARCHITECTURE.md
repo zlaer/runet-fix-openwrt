@@ -64,6 +64,8 @@ table inet runet_fix {
         # Exclude Telegram and Private LAN traffic from NFQUEUE
         ip daddr @telegram_v4 return
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
 
         # Forward TCP 80, 443 initial packets (connbytes < 20) to nfqws
         tcp dport { 80, 443 } ct original packets < 20 counter queue num $qnum bypass
@@ -81,6 +83,8 @@ table inet runet_fix {
 
         ip daddr @telegram_v4 return
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
 
         tcp dport { 80, 443 } ct original packets < 20 counter queue num $qnum bypass
         udp dport { 50000-50100, 19294-19344 } ct original packets < 10 counter queue num $qnum bypass

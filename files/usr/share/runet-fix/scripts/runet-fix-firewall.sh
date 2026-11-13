@@ -24,6 +24,23 @@ get_qnum() {
 }
 QNUM=$(get_qnum)
 
+# A non-numeric UCI port must not be interpolated into nftables or iptables.
+get_tg_port() {
+    local p
+    p=$(uci -q get runet-fix.telegram.port)
+    case "$p" in
+        ''|*[!0-9]*)
+            echo "1443"
+            return
+            ;;
+    esac
+    if [ "$p" -ge 1 ] && [ "$p" -le 65535 ]; then
+        echo "$p"
+    else
+        echo "1443"
+    fi
+}
+
 # Helper to execute iptables and log errors
 ipt_apply() {
     if ! iptables "$@"; then
@@ -48,11 +65,17 @@ validate_ip_or_cidr() {
         esac
         [ "$cidr_part" -ge 0 ] 2>/dev/null && [ "$cidr_part" -le 32 ] 2>/dev/null || return 1
     fi
-    local o1 o2 o3 o4
-    o1=$(echo "$ip_part" | cut -d. -f1)
-    o2=$(echo "$ip_part" | cut -d. -f2)
-    o3=$(echo "$ip_part" | cut -d. -f3)
-    o4=$(echo "$ip_part" | cut -d. -f4)
+    local o1 o2 o3 o4 old_ifs
+    old_ifs=$IFS
+    IFS=.
+    # shellcheck disable=SC2086
+    set -- $ip_part
+    IFS=$old_ifs
+    [ "$#" -eq 4 ] || return 1
+    o1=$1
+    o2=$2
+    o3=$3
+    o4=$4
     [ -n "$o1" ] && [ -n "$o2" ] && [ -n "$o3" ] && [ -n "$o4" ] || return 1
     [ "$o1" -ge 0 ] 2>/dev/null && [ "$o1" -le 255 ] 2>/dev/null || return 1
     [ "$o2" -ge 0 ] 2>/dev/null && [ "$o2" -le 255 ] 2>/dev/null || return 1
@@ -140,7 +163,8 @@ start_nft() {
     local QNUM=$(get_qnum)
     local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
     [ -z "$tg_enabled" ] && tg_enabled="1" 
-    local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
+    local tg_port
+    tg_port=$(get_tg_port)
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
     local excl_ips=$(uci -q get runet-fix.zapret.excluded_ips)
@@ -239,6 +263,8 @@ $([ "$has_excl_ips" = "1" ] && echo "        ip saddr @excluded_ips return")
 $([ "$has_excl_macs" = "1" ] && echo "        ether saddr @excluded_macs return")
 $([ "$tg_enabled" = "1" ] && echo "        ip daddr @telegram_v4 return")
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
         tcp dport { $tcp_ports } ct original packets < 20 counter queue num $QNUM bypass
 $([ "$discord_fix" = "1" ] && echo "        udp dport { 19294-19344, 50000-50100 } ct original packets < 10 counter queue num $QNUM bypass")
 $([ "$game_fix" = "1" ] && echo "        udp dport { 27015-27050, 7777-7780 } ct original packets < 10 counter queue num $QNUM bypass")
@@ -248,6 +274,8 @@ $([ "$game_fix" = "1" ] && echo "        udp dport { 27015-27050, 7777-7780 } ct
         type filter hook output priority mangle; policy accept;
         mark 0x40000000 return
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
 $([ "$tg_enabled" = "1" ] && echo "        ip daddr @telegram_v4 return")
         tcp dport { 80, 443 } ct original packets < 20 counter queue num $QNUM bypass
     }
@@ -301,7 +329,8 @@ start_ipt() {
     [ -z "$zapret_enabled" ] && zapret_enabled="1"
     local tg_enabled=$(uci -q get runet-fix.telegram.enabled)
     [ -z "$tg_enabled" ] && tg_enabled="1" 
-    local tg_port=$(uci -q get runet-fix.telegram.port || echo "1443")
+    local tg_port
+    tg_port=$(get_tg_port)
     local discord_fix=$(uci -q get runet-fix.zapret.discord_fix || echo "1")
     local game_fix=$(uci -q get runet-fix.zapret.game_fix || echo "0")
     local excl_ips=$(uci -q get runet-fix.zapret.excluded_ips)
@@ -336,12 +365,12 @@ start_ipt() {
         for ip in $valid_excl_ips; do
             ipt_apply -t nat -A RUNET_TG -s "$ip" -j RETURN
         done
-        ipt_apply -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
+        ipt_apply -t nat -A RUNET_TG -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports "$tg_port"
         ipt_apply -t nat -I PREROUTING -m set --match-set tg_subnets dst -j RUNET_TG
 
         # Router local Telegram traffic proxying (RUNET_TG_OUT)
         ipt_apply -t nat -A RUNET_TG_OUT -m mark --mark 0x40000000 -j RETURN
-        ipt_apply -t nat -A RUNET_TG_OUT -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports $tg_port
+        ipt_apply -t nat -A RUNET_TG_OUT -p tcp -m multiport --dports 80,443,5222,8443 -j REDIRECT --to-ports "$tg_port"
         ipt_apply -t nat -I OUTPUT -m set --match-set tg_subnets dst -j RUNET_TG_OUT
 
         # Telegram IPv6 leak prevention (fw3): force clients to fallback to IPv4 transparent proxy

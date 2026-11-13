@@ -82,11 +82,15 @@ pub fn parse_client_handshake(
     }
 
     let dc_idx = i16::from_le_bytes([decrypted[DC_IDX_POS], decrypted[DC_IDX_POS + 1]]);
-    let dc_id = dc_idx.unsigned_abs() as u8;
+    let mut dc_id = dc_idx.unsigned_abs() as u32;
+    // Production clients mark test DCs as id + 10000.
+    if dc_id >= 10_000 {
+        dc_id -= 10_000;
+    }
     let is_media = dc_idx < 0;
 
     Some(HandshakeResult {
-        dc_id: if dc_id == 0 { 2 } else { dc_id },
+        dc_id: if dc_id == 0 || dc_id > 255 { 2 } else { dc_id as u8 },
         is_media,
         proto_tag,
         client_dec_prekey_iv: prekey_iv,
@@ -254,6 +258,11 @@ mod tests {
 
     #[test]
     fn test_parse_client_handshake_roundtrip() {
+        let (test_dc, _, _) = generate_relay_init(PROTO_TAG_INTERMEDIATE, 10_002);
+        let test_parsed = parse_client_handshake(&test_dc, None).unwrap();
+        assert_eq!(test_parsed.dc_id, 2);
+        assert!(!test_parsed.is_media);
+
         let (handshake, _, _) = generate_relay_init(PROTO_TAG_INTERMEDIATE, 2);
         let res = parse_client_handshake(&handshake, None);
         assert!(

@@ -31,7 +31,10 @@ impl WhitelistMatcher {
     pub fn load_from_file<P: AsRef<Path>>(&mut self, path: P) {
         if let Ok(file) = File::open(path) {
             let reader = BufReader::new(file);
-            for line in reader.lines().map_while(Result::ok) {
+            for line in reader.lines() {
+                let Ok(line) = line else {
+                    continue;
+                };
                 self.add_domain(&line);
             }
         }

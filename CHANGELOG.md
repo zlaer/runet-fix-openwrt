@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-11-13
+
+### Fixed
+- Telegram DC4 address `149.154.167.91` is no longer classified as DC2, and test DC ids (`id + 10000`) are reduced before routing.
+- Upstream WebSocket messages are reassembled until FIN. An empty binary frame no longer closes the client session.
+- Firewall rejects IPv4 values that do not have exactly four octets, and a non-numeric Telegram port falls back to 1443 instead of being written into nftables or iptables.
+- Zapret NFQUEUE skips IPv6 unique-local and link-local destinations.
+- Adblock whitelist loading skips a bad line instead of stopping the rest of the file.
+
 ## [1.6.0] - 2026-11-13
 
 ### Added
