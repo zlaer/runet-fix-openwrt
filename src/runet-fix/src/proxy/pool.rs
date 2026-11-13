@@ -67,12 +67,12 @@ impl WsConnectionPool {
         loop {
             ticker.tick().await;
 
-            // 1. Move idle connections out of the pool so PINGs never run while the
-            //    mutex is held. A connection lives either in the pool or in this batch,
-            //    so it cannot be pinged twice.
+            // 1. Ping one idle socket per DC and leave the rest in the pool.
+            //    The mutex is released before the PING, so a new client can still
+            //    take a warm connection during the check.
             let candidates = {
                 let mut lock = self.pool.lock().await;
-                drain_connections(&mut lock)
+                take_one_per_dc(&mut lock)
             };
             let healthy = Self::ping_batch(candidates).await;
             {
@@ -247,17 +247,18 @@ impl WsConnectionPool {
     }
 }
 
-/// Removes every idle connection from `pool`, preserving its DC.
+/// Pops one idle connection per DC.
 ///
-/// The caller owns the returned connections, so it can release the lock before
-/// performing network I/O (PING) on them.
-fn drain_connections<T>(pool: &mut HashMap<u8, Vec<T>>) -> Vec<(u8, T)> {
-    let mut drained = Vec::new();
+/// The caller owns the returned connections and can release the lock before
+/// performing network I/O (PING). Every other socket stays in the pool.
+fn take_one_per_dc<T>(pool: &mut HashMap<u8, Vec<T>>) -> Vec<(u8, T)> {
+    let mut taken = Vec::new();
     for (dc, list) in pool.iter_mut() {
-        drained.extend(list.drain(..).map(|conn| (*dc, conn)));
+        if let Some(conn) = list.pop() {
+            taken.push((*dc, conn));
+        }
     }
-    pool.retain(|_, list| !list.is_empty());
-    drained
+    taken
 }
 
 #[cfg(test)]
@@ -265,16 +266,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_drain_connections_owns_candidates() {
+    fn test_take_one_per_dc_leaves_the_rest() {
         let mut pool: HashMap<u8, Vec<u32>> = HashMap::new();
         pool.insert(2, vec![10, 11]);
         pool.insert(4, vec![20]);
 
-        let mut candidates = drain_connections(&mut pool);
-        candidates.sort_by_key(|(dc, id)| (*dc, *id));
+        let mut taken = take_one_per_dc(&mut pool);
+        taken.sort_by_key(|(dc, id)| (*dc, *id));
 
-        assert_eq!(candidates, vec![(2, 10), (2, 11), (4, 20)]);
-        assert!(pool.is_empty());
+        assert_eq!(taken, vec![(2, 11), (4, 20)]);
+        assert_eq!(pool.get(&2).map(|v| v.as_slice()), Some(&[10][..]));
+        assert!(pool.get(&4).unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -283,12 +285,15 @@ mod tests {
 
         let candidates = {
             let mut guard = pool.lock().await;
-            drain_connections(&mut guard)
+            take_one_per_dc(&mut guard)
         };
 
         // The guard is released before a "ping" would start, so the pool stays usable.
         let acquired = tokio::time::timeout(Duration::from_millis(100), pool.lock()).await;
         assert!(acquired.is_ok());
-        assert_eq!(candidates.len(), 2);
+        drop(acquired);
+        assert_eq!(candidates, vec![(2, 11)]);
+        let guard = pool.lock().await;
+        assert_eq!(guard.get(&2).map(|v| v.as_slice()), Some(&[10][..]));
     }
 }

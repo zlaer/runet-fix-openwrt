@@ -237,7 +237,7 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         let file = File::create(&tmp_conf)?;
         let mut writer = BufWriter::with_capacity(65536, file);
         for domain in &blocked_domains {
-            writeln!(writer, "address=/{}/", domain)?;
+            writeln!(writer, "address=/{domain}/0.0.0.0")?;
         }
         writer.flush()?;
     }
@@ -253,15 +253,22 @@ pub fn run(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         let _ = fs::set_permissions(COUNT_FILE, fs::Permissions::from_mode(0o644));
     }
 
-    // 7. Restart or notify dnsmasq
+    // 7. Reload dnsmasq. A full restart drops DNS for the whole LAN.
     println!("[runet-fix:adblock] Reloading dnsmasq configuration...");
-    let restarted = Command::new("/etc/init.d/dnsmasq")
-        .arg("restart")
+    let reloaded = Command::new("/etc/init.d/dnsmasq")
+        .arg("reload")
         .status()
         .map(|s| s.success())
         .unwrap_or(false);
-    if !restarted {
-        let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
+    if !reloaded {
+        let restarted = Command::new("/etc/init.d/dnsmasq")
+            .arg("restart")
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        if !restarted {
+            let _ = Command::new("killall").args(["-HUP", "dnsmasq"]).status();
+        }
     }
 
     let elapsed = start_time.elapsed();

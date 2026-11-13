@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-11-13
+
+### Fixed
+- nftables rules are replaced in one `nft -f` transaction. A bad ruleset no longer deletes the live table first.
+- Telegram and DNS redirects, and Zapret on `FORWARD`, match the LAN bridge only. WAN packets that reach the router are not sent to the local proxy or dnsmasq.
+- UDP 443 is dropped by default (`quic_mode=drop`) so browsers fall back to TCP. `quic_mode=queue` keeps the previous NFQUEUE behaviour.
+- Telegram pool maintenance pings one warm connection per DC and leaves the others available.
+- Adblock writes `address=/domain/0.0.0.0` and reloads dnsmasq instead of restarting it.
+- README no longer contains a form-feed before `filter-aaaa`.
+
+### Changed
+- Game UDP ports come from `runet-fix.zapret.game_udp_ports` (default `27015-27050,7777-7780`).
+- Prebuilt core binaries are no longer stored in git. Install them from the GitHub release; `prebuilt/SHA256SUMS` stays as the checksum list.
+
 ## [1.6.1] - 2026-11-13
 
 ### Fixed

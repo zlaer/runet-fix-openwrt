@@ -254,7 +254,7 @@ if [ -n "$TG_ARCH" ]; then
             INSTALLED_CORE=1
             USED_RELEASE=1
         else
-            echo "${YELLOW}Release artifact not found; falling back to master branch prebuilt...${NC}"
+            echo "${YELLOW}Release artifact not found; falling back to prebuilt/ in the repository...${NC}"
             if safe_download "$FALLBACK_BIN_URL/runet-fix-$TG_ARCH" /usr/bin/runet-fix-core; then
                 INSTALLED_CORE=1
                 USED_RELEASE=0
@@ -266,22 +266,28 @@ if [ -n "$TG_ARCH" ]; then
     fi
 
     if [ "$INSTALLED_CORE" = "1" ] && [ -f /usr/bin/runet-fix-core ]; then
-        # Check against SHA256SUMS if present
+        # A release binary must be checked against that release's SHA256SUMS.
+        # The copy in git can belong to an older build.
         sum_file=""
-        if [ -f "$REPO_DIR/prebuilt/SHA256SUMS" ]; then
-            sum_file="$REPO_DIR/prebuilt/SHA256SUMS"
-        elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/SHA256SUMS" ]; then
-            sum_file="$SRC/prebuilt/SHA256SUMS"
-        else
-            # Downloaded core: fetch the matching checksum list from release or master.
+        TMP_SUMS=""
+        if [ "$USED_RELEASE" = "1" ]; then
             TMP_SUMS=$(mktemp /tmp/runet-fix-sums.XXXXXX 2>/dev/null || echo "/tmp/runet-fix-sums")
-            sum_file="$TMP_SUMS"
-            if [ "$USED_RELEASE" = "1" ]; then
-                if ! safe_download "$RELEASE_BIN_URL/SHA256SUMS" "$sum_file"; then
-                    safe_download "$FALLBACK_BIN_URL/SHA256SUMS" "$sum_file" || sum_file=""
-                fi
+            if safe_download "$RELEASE_BIN_URL/SHA256SUMS" "$TMP_SUMS"; then
+                sum_file="$TMP_SUMS"
+            fi
+        fi
+        if [ -z "$sum_file" ]; then
+            if [ -f "$REPO_DIR/prebuilt/SHA256SUMS" ]; then
+                sum_file="$REPO_DIR/prebuilt/SHA256SUMS"
+            elif [ -n "$SRC" ] && [ -f "$SRC/prebuilt/SHA256SUMS" ]; then
+                sum_file="$SRC/prebuilt/SHA256SUMS"
             else
-                safe_download "$FALLBACK_BIN_URL/SHA256SUMS" "$sum_file" || sum_file=""
+                TMP_SUMS=$(mktemp /tmp/runet-fix-sums.XXXXXX 2>/dev/null || echo "/tmp/runet-fix-sums")
+                if safe_download "$FALLBACK_BIN_URL/SHA256SUMS" "$TMP_SUMS"; then
+                    sum_file="$TMP_SUMS"
+                else
+                    sum_file=""
+                fi
             fi
         fi
         if [ -n "$sum_file" ] && [ -f "$sum_file" ]; then

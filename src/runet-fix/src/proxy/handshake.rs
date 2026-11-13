@@ -90,7 +90,11 @@ pub fn parse_client_handshake(
     let is_media = dc_idx < 0;
 
     Some(HandshakeResult {
-        dc_id: if dc_id == 0 || dc_id > 255 { 2 } else { dc_id as u8 },
+        dc_id: if dc_id == 0 || dc_id > 255 {
+            2
+        } else {
+            dc_id as u8
+        },
         is_media,
         proto_tag,
         client_dec_prekey_iv: prekey_iv,

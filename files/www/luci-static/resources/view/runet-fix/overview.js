@@ -322,6 +322,10 @@ return view.extend({
 		o_en.rmempty = false;
 		o_en.default = o_en.enabled;
 
+		var lanIfaces = s.option(form.Value, 'lan_ifaces', _('LAN interfaces'), _('Space-separated bridges whose traffic may be redirected to the Telegram proxy, dnsmasq, and nfqws. Empty follows the LAN device, then br-lan.'));
+		lanIfaces.placeholder = 'br-lan';
+		lanIfaces.rmempty = true;
+
 		// Version & Update Management Row
 		var v_ctrl = s.option(form.DummyValue, '_version_control', _('Runet-Fix Version'));
 		v_ctrl.rawhtml = true;

@@ -27,6 +27,8 @@ if [ -f /etc/config/runet-fix ]; then
     [ -z "$(uci -q get runet-fix.zapret.preset)" ] && uci set runet-fix.zapret.preset='youtube_4k' && CHANGED=1
     [ -z "$(uci -q get runet-fix.zapret.mode)" ] && uci set runet-fix.zapret.mode='all' && CHANGED=1
     [ -z "$(uci -q get runet-fix.zapret.discord_fix)" ] && uci set runet-fix.zapret.discord_fix='1' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.game_udp_ports)" ] && uci set runet-fix.zapret.game_udp_ports='27015-27050,7777-7780' && CHANGED=1
+    [ -z "$(uci -q get runet-fix.zapret.quic_mode)" ] && uci set runet-fix.zapret.quic_mode='drop' && CHANGED=1
     [ -z "$(uci -q get runet-fix.zapret.qnum)" ] && uci set runet-fix.zapret.qnum='200' && CHANGED=1
     [ -z "$(uci -q get runet-fix.zapret.exclude_ru)" ] && uci set runet-fix.zapret.exclude_ru='1' && CHANGED=1
     [ -z "$(uci -q get runet-fix.zapret.auto_update_hosts)" ] && uci set runet-fix.zapret.auto_update_hosts='weekly' && CHANGED=1

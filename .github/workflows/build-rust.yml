@@ -221,16 +221,14 @@ jobs:
             release_assets/SHA256SUMS
           generate_release_notes: true
 
-      - name: Sync updated prebuilt binaries to repository
+      - name: Sync release checksums to repository
         run: |
           mkdir -p prebuilt
-          cp release_assets/runet-fix-* prebuilt/ 2>/dev/null || true
-          cp release_assets/tg-ws-proxy-* prebuilt/ 2>/dev/null || true
-          cp release_assets/SHA256SUMS prebuilt/ 2>/dev/null || true
+          cp release_assets/SHA256SUMS prebuilt/SHA256SUMS
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add prebuilt/
+          git add prebuilt/SHA256SUMS
           if ! git diff --cached --quiet; then
-            git commit -m "prebuilt: sync release artifacts [skip ci]"
+            git commit -m "prebuilt: sync release checksums [skip ci]"
             git push origin master || true
           fi

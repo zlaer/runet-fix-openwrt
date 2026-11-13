@@ -2,7 +2,7 @@
 
 [![OpenWrt](https://img.shields.io/badge/OpenWrt-21.02_--_25.x-blue.svg)](https://openwrt.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub release](https://img.shields.io/badge/Release-v1.6.1-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
+[![GitHub release](https://img.shields.io/badge/Release-v1.6.2-orange.svg)](https://github.com/zlaer/runet-fix-openwrt/releases)
 [![AI Generated](https://img.shields.io/badge/AI-Generated_Project-blueviolet.svg)](#)
 
 > [!NOTE]
@@ -67,7 +67,7 @@
   * Адаптивный (Demand-driven) пулинг соединений к DC2/DC4.
 * **Smart Adblock**:
   * Выбор профиля фильтрации: Микро (<2 МБ ОЗУ для 64 МБ роутеров), Стандартный (~76k+ с доменами Рунета), Агрессивный.
-  * Защита от утечек и обхода через IPv6 (ilter-aaaa).
+  * Защита от утечек и обхода через IPv6 (filter-aaaa).
   * Редакторы белого и черного списков.
   * Автоматическое обновление базы по расписанию.
 * **Диагностика и Логи**:
@@ -91,6 +91,8 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/zlaer/runet-fix-openwrt/ma
 3. Установит необходимые зависимости ядра (`kmod-nft-queue`, `ipset`, `curl`).
 4. Загрузит свежие бинарные шаблоны Flowseal, скрипты и веб-интерфейс LuCI.
 5. Настроит автозапуск и применит оптимальную конфигурацию.
+
+Бинарник `runet-fix-core` берётся из [GitHub Release](https://github.com/zlaer/runet-fix-openwrt/releases). В git остаётся только `prebuilt/SHA256SUMS`; сами файлы `prebuilt/runet-fix-*` туда больше не коммитятся.
 
 ---
 
