@@ -250,13 +250,17 @@ start_service() {
             if [ "$preset" = "custom" ] && echo "$custom_args" | grep -q -- "--qnum"; then
                 args="$custom_args"
             else
-                # 1. QUIC UDP profile (UDP 443)
-                local quic_opts="--filter-udp=443"
-                [ -n "$hostlist_opts" ] && quic_opts="$quic_opts $hostlist_opts"
-                [ -n "$exclude_opts" ] && quic_opts="$quic_opts $exclude_opts"
-                quic_opts="$quic_opts --dpi-desync=fake --dpi-desync-repeats=11"
-                if [ -f "$bin_dir/quic_initial_www_google_com.bin" ]; then
-                    quic_opts="$quic_opts --dpi-desync-fake-quic=$bin_dir/quic_initial_www_google_com.bin"
+                # 1. QUIC UDP profile (UDP 443) - active only when quic_mode is queue
+                local quic_opts=""
+                local quic_mode=$(uci -q get runet-fix.zapret.quic_mode || echo "drop")
+                if [ "$quic_mode" = "queue" ]; then
+                    quic_opts="--filter-udp=443"
+                    [ -n "$hostlist_opts" ] && quic_opts="$quic_opts $hostlist_opts"
+                    [ -n "$exclude_opts" ] && quic_opts="$quic_opts $exclude_opts"
+                    quic_opts="$quic_opts --dpi-desync=fake --dpi-desync-repeats=11"
+                    if [ -f "$bin_dir/quic_initial_www_google_com.bin" ]; then
+                        quic_opts="$quic_opts --dpi-desync-fake-quic=$bin_dir/quic_initial_www_google_com.bin"
+                    fi
                 fi
 
                 # 2. Discord Voice UDP profile (WebRTC & STUN)
@@ -295,7 +299,8 @@ start_service() {
                 [ -n "$exclude_opts" ] && main_tcp="$main_tcp $exclude_opts"
                 [ -n "$desync_opts" ] && main_tcp="$main_tcp $desync_opts"
 
-                args="--qnum=$qnum $quic_opts"
+                args="--qnum=$qnum"
+                [ -n "$quic_opts" ] && args="$args $quic_opts"
                 [ -n "$voice_opts" ] && args="$args $voice_opts"
                 [ -n "$media_opts" ] && args="$args $media_opts"
                 [ -n "$game_opts" ] && args="$args $game_opts"

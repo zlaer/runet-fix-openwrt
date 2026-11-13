@@ -322,7 +322,7 @@ start_nft() {
     if [ "$(quic_mode)" = "queue" ]; then
         quic_rule="udp dport 443 ct original packets < 10 counter queue num $QNUM bypass"
     else
-        quic_rule="udp dport 443 counter drop"
+        quic_rule="udp dport 443 counter reject"
     fi
 
     local NFT_CONF="/tmp/runet-fix-nft.conf"
