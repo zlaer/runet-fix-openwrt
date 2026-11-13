@@ -3,10 +3,10 @@ pub fn get_zapret_args(preset: &str, custom: Option<&str>) -> String {
 
     match preset {
         "youtube_4k" => {
-            "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6".to_string()
+            "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=6".to_string()
         }
         "fakedsplit_badseq" => {
-            "--dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq,md5sig --dpi-desync-repeats=6".to_string()
+            "--dpi-desync=fakedsplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badseq --dpi-desync-repeats=6".to_string()
         }
         "multisplit_badsum" => {
             "--dpi-desync=fake,multisplit --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-repeats=4".to_string()
@@ -21,7 +21,7 @@ pub fn get_zapret_args(preset: &str, custom: Option<&str>) -> String {
             "--dpi-desync=fake,split2 --dpi-desync-split-pos=1 --dpi-desync-fooling=badsum --dpi-desync-wsize=4".to_string()
         }
         "tls_cutoff" => {
-            "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq,md5sig --dpi-desync-cutoff=d4".to_string()
+            "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-fooling=badseq --dpi-desync-cutoff=d4".to_string()
         }
         "discord_fix" => {
             "--dpi-desync=fake --dpi-desync-repeats=6 --dpi-desync-any-protocol=1 --dpi-desync-cutoff=n3".to_string()
