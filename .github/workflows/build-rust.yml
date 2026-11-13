@@ -49,11 +49,47 @@ jobs:
         with:
           workspaces: src/runet-fix
 
-      - name: Install verification tools (shellcheck, gettext)
-        run: sudo apt-get update && sudo apt-get install -y shellcheck gettext
+      - name: cargo fmt
+        working-directory: src/runet-fix
+        run: cargo fmt --check
 
-      - name: Run unified verification suite (scripts/check.sh)
-        run: sh scripts/check.sh
+      - name: cargo clippy
+        working-directory: src/runet-fix
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: src/runet-fix
+        run: cargo test
+
+      - name: Python syntax check
+        run: python3 -m compileall -q files/usr/share/runet-fix/tg_ws_proxy
+
+      - name: Python unit tests
+        run: python3 -m unittest discover -s files/usr/share/runet-fix/tg_ws_proxy -t files/usr/share/runet-fix -p "test_*.py"
+
+      - name: LuCI JavaScript syntax check
+        run: |
+          for f in files/www/luci-static/resources/view/runet-fix/*.js; do
+            node --check "$f"
+          done
+
+      - name: Shell syntax check
+        run: |
+          sh -n install.sh
+          sh -n files/usr/bin/runet-fix
+          sh -n files/etc/init.d/runet-fix
+          for f in files/usr/share/runet-fix/scripts/*.sh scripts/*.sh; do
+            [ -f "$f" ] && sh -n "$f"
+          done
+
+      - name: Version consistency
+        run: sh scripts/check-version.sh
+
+      - name: Documentation parity
+        run: sh scripts/check-docs.sh
+
+      - name: CLI smoke tests
+        run: sh scripts/test-cli.sh
 
   build:
     name: Build ${{ matrix.name }}
