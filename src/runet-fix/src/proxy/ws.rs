@@ -300,8 +300,12 @@ impl RawWebSocket {
         Ok(())
     }
 
-    /// Receives a binary frame from the server, transparently answering PINGs with PONG.
-    pub async fn recv_binary(&mut self, out_buf: &mut Vec<u8>) -> io::Result<usize> {
+    /// Receives one complete binary message from the server, answering PINGs with PONG.
+    ///
+    /// `Ok(None)` is end of stream. `Ok(Some(0))` is a valid empty message and is not EOF.
+    /// Frames with FIN cleared are accumulated until the final fragment arrives.
+    pub async fn recv_binary(&mut self, out_buf: &mut Vec<u8>) -> io::Result<Option<usize>> {
+        let mut pending_payload = Vec::new();
         loop {
             // Periodic compaction: if cursor reached buffer end, clear in O(1);
             // if unconsumed prefix is large, drain accumulated dead space
@@ -318,13 +322,14 @@ impl RawWebSocket {
                 let mut tmp = [0u8; 4096];
                 let n = self.stream.read(&mut tmp).await?;
                 if n == 0 {
-                    return Ok(0); // EOF
+                    return Ok(None);
                 }
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
 
             let b0 = self.read_buf[self.read_pos];
             let b1 = self.read_buf[self.read_pos + 1];
+            let fin = b0 & 0x80 != 0;
             let opcode = b0 & 0x0F;
             let is_masked = (b1 & 0x80) != 0;
             let mut payload_len = (b1 & 0x7F) as usize;
@@ -344,7 +349,7 @@ impl RawWebSocket {
                 let mut tmp = [0u8; 4096];
                 let n = self.stream.read(&mut tmp).await?;
                 if n == 0 {
-                    return Ok(0);
+                    return Ok(None);
                 }
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
@@ -390,7 +395,7 @@ impl RawWebSocket {
                 let to_read = needed.min(tmp.len());
                 let n = self.stream.read(&mut tmp[..to_read]).await?;
                 if n == 0 {
-                    return Ok(0);
+                    return Ok(None);
                 }
                 self.read_buf.extend_from_slice(&tmp[..n]);
             }
@@ -408,8 +413,14 @@ impl RawWebSocket {
             }
 
             match opcode {
-                WS_OP_BINARY | WS_OP_CONT => {
-                    out_buf.extend_from_slice(&self.read_buf[payload_start..payload_end]);
+                WS_OP_BINARY | WS_OP_CONT | WS_OP_TEXT => {
+                    pending_payload.extend_from_slice(&self.read_buf[payload_start..payload_end]);
+                    if pending_payload.len() > MAX_WS_FRAME_PAYLOAD {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "WebSocket message exceeds the frame limit",
+                        ));
+                    }
                     self.read_pos += total_frame;
                     if self.read_pos >= self.read_buf.len() {
                         self.read_buf.clear();
@@ -421,7 +432,12 @@ impl RawWebSocket {
                     if self.read_buf.is_empty() && self.read_buf.capacity() > 65536 {
                         self.read_buf.shrink_to(16384);
                     }
-                    return Ok(payload_len);
+                    if !fin {
+                        continue;
+                    }
+                    let message_len = pending_payload.len();
+                    out_buf.extend_from_slice(&pending_payload);
+                    return Ok(Some(message_len));
                 }
                 WS_OP_PING => {
                     let ping_payload = self.read_buf[payload_start..payload_end].to_vec();
@@ -438,7 +454,7 @@ impl RawWebSocket {
                 }
                 WS_OP_CLOSE => {
                     self.read_pos += total_frame;
-                    return Ok(0);
+                    return Ok(None);
                 }
                 _ => {
                     self.read_pos += total_frame;

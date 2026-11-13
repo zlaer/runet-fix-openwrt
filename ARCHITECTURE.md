@@ -32,10 +32,11 @@ table inet runet_fix {
         }
     }
 
-    # NAT Prerouting: Transparent redirection of LAN Telegram TCP traffic
+    # NAT Prerouting: Transparent redirection of LAN Telegram TCP traffic.
+    # iifname is the LAN bridge (or the UCI list runet-fix.main.lan_ifaces).
     chain tg_nat_pre {
         type nat hook prerouting priority dstnat; policy accept;
-        ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port
+        iifname "br-lan" ip daddr @telegram_v4 tcp dport { 80, 443, 5222, 8443 } counter redirect to :$tg_port
     }
 
     # NAT Output: Redirects local router requests to Telegram
@@ -64,15 +65,18 @@ table inet runet_fix {
         # Exclude Telegram and Private LAN traffic from NFQUEUE
         ip daddr @telegram_v4 return
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
 
         # Forward TCP 80, 443 initial packets (connbytes < 20) to nfqws
-        tcp dport { 80, 443 } ct original packets < 20 counter queue num $qnum bypass
+        iifname "br-lan" tcp dport { 80, 443 } ct original packets < 20 counter queue num $qnum bypass
 
         # Discord Voice UDP (50000-50100, 19294-19344)
-        udp dport { 50000-50100, 19294-19344 } ct original packets < 10 counter queue num $qnum bypass
+        iifname "br-lan" udp dport { 50000-50100, 19294-19344 } ct original packets < 10 counter queue num $qnum bypass
 
-        # QUIC (UDP 443)
-        udp dport 443 ct original packets < 10 counter queue num $qnum bypass
+        # QUIC (UDP 443). Default quic_mode=drop forces a TCP fallback.
+        # quic_mode=queue restores: udp dport 443 ct original packets < 10 counter queue num $qnum bypass
+        iifname "br-lan" udp dport 443 counter drop
     }
 
     # Mangle Output: Zapret Netfilter Queue interception for local router traffic
@@ -81,17 +85,17 @@ table inet runet_fix {
 
         ip daddr @telegram_v4 return
         ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8 } return
+        ip6 daddr fe80::/10 return
+        ip6 daddr fc00::/7 return
 
         tcp dport { 80, 443 } ct original packets < 20 counter queue num $qnum bypass
-        udp dport { 50000-50100, 19294-19344 } ct original packets < 10 counter queue num $qnum bypass
-        udp dport 443 ct original packets < 10 counter queue num $qnum bypass
     }
 
-    # DNS Interception: Redirects port 53 to local dnsmasq
+    # DNS Interception: Redirects LAN port 53 to local dnsmasq
     chain dns_nat_pre {
         type nat hook prerouting priority dstnat; policy accept;
-        udp dport 53 counter redirect to :53
-        tcp dport 53 counter redirect to :53
+        iifname "br-lan" udp dport 53 counter redirect to :53
+        iifname "br-lan" tcp dport 53 counter redirect to :53
     }
 }
 ```
@@ -100,11 +104,11 @@ table inet runet_fix {
 
 For OpenWrt installations running iptables, Runet-Fix uses dedicated custom chains:
 
-- `RUNET_TG` (in `nat` `PREROUTING`): redirects matching Telegram destination IPs (via ipset `runet_tg_v4` or individual CIDRs) to `$tg_port`.
+- `RUNET_TG` (in `nat` `PREROUTING`): redirects matching Telegram destination IPs from the LAN interface (via ipset `tg_subnets`) to `$tg_port`.
 - `RUNET_TG_OUT` (in `nat` `OUTPUT`): redirects local router Telegram traffic to `$tg_port` with `mark 0x40000000` exclusion to prevent routing loops.
 - `RUNET_ZAPRET` (in `mangle` `FORWARD`): matches initial packets (`--connbytes-packets 1:20`) and queues them to NFQUEUE `--queue-num $qnum --queue-bypass`.
 - `RUNET_ZAPRET_OUT` (in `mangle` `OUTPUT`): intercepts local router traffic to Zapret NFQUEUE `--queue-num $qnum`.
-- `PREROUTING` (in `nat`): intercepts DNS port 53 traffic and redirects to local port 53.
+- `PREROUTING` (in `nat`): intercepts DNS port 53 from the LAN interface and redirects to local port 53. Game UDP ports come from `runet-fix.zapret.game_udp_ports`.
 
 ### 1.3 Packet Pipeline
 

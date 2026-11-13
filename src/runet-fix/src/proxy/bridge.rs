@@ -111,12 +111,15 @@ pub async fn bridge_stream(
 
             // Leg 2: Upstream WS -> Decrypt -> Convert Framing -> Encrypt -> Client TCP
             res = ws.recv_binary(&mut ws_recv_buf) => {
-                let n = res?;
-                if n == 0 {
-                    log::debug!("[{}] Upstream WebSocket closed connection", label);
-                    let _ = client_write.shutdown().await;
-                    break;
-                }
+                let n = match res? {
+                    None => {
+                        log::debug!("[{}] Upstream WebSocket closed connection", label);
+                        let _ = client_write.shutdown().await;
+                        break;
+                    }
+                    Some(0) => continue,
+                    Some(n) => n,
+                };
 
                 // Decrypt received payload in-place
                 let start_idx = ws_recv_buf.len() - n;

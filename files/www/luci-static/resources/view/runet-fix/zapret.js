@@ -78,9 +78,20 @@ return view.extend({
 		discord.default = '1';
 		discord.rmempty = false;
 
-		var game = s.option(form.Flag, 'game_fix', _('Online Games UDP Acceleration (Game UDP Fix)'), _('Desynchronizes UDP ports 27015-27050 and 7777-7780 (Steam, CS2, Dota 2, GTA Online) with game binary patterns to eliminate TSPU packet drops.'));
+		var game = s.option(form.Flag, 'game_fix', _('Online Games UDP Acceleration (Game UDP Fix)'), _('Queues the UDP ports listed below. Leave this off unless those ports belong to a game you play.'));
 		game.default = '0';
 		game.rmempty = false;
+
+		var gamePorts = s.option(form.Value, 'game_udp_ports', _('Game UDP ports'), _('Comma-separated ports or ranges, for example 27015-27050,7777-7780.'));
+		gamePorts.depends('game_fix', '1');
+		gamePorts.default = '27015-27050,7777-7780';
+		gamePorts.rmempty = false;
+
+		var quic = s.option(form.ListValue, 'quic_mode', _('QUIC (UDP 443)'), _('Drop makes browsers fall back to TCP, which nfqws can desynchronize. Queue keeps QUIC and tries to desynchronize it.'));
+		quic.value('drop', _('Drop (recommended)'));
+		quic.value('queue', _('Queue for desync'));
+		quic.default = 'drop';
+		quic.rmempty = false;
 
 		var qnum = s.option(form.Value, 'qnum', _('Netfilter Queue Number (QNUM)'), _('Kernel queue index used for packet exchange between firewall and nfqws.'));
 		qnum.datatype = 'port';

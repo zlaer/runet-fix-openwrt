@@ -13,6 +13,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Core binaries are published as GitHub release assets.
+prebuilt/runet-fix-*
+prebuilt/tg-ws-proxy-*
+
 # Temporary scratch
 scratch/
 .system_generated/
